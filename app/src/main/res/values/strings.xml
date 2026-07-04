@@ -1,0 +1,128 @@
+<resources>
+    <string name="app_name">Verba</string>
+
+    <!-- Home -->
+    <string name="input_hint">Type to translate</string>
+    <string name="input_clear">Clear text</string>
+    <string name="input_paste">Paste from clipboard</string>
+    <string name="settings_open">Open settings</string>
+    <string name="pair_chip_description">%1$s to %2$s. Opens the language picker.</string>
+    <string name="swap_languages">Swap languages</string>
+    <string name="result_region">Translation</string>
+
+    <!-- Result actions -->
+    <string name="action_copy">Copy translation</string>
+    <string name="action_save">Save translation</string>
+    <string name="result_copied">Copied</string>
+    <string name="result_saved">Saved</string>
+    <string name="result_removed">Removed</string>
+
+    <!-- Result: empty -->
+    <string name="result_empty_title">Nothing to translate yet.</string>
+    <string name="result_empty_body">Type above and the %1$s version lands here.</string>
+
+    <!-- Result: loading -->
+    <string name="result_loading_caption">Waiting on %1$s…</string>
+
+    <!-- Result: errors -->
+    <string name="error_offline_title">You’re offline.</string>
+    <string name="error_offline_body">Verba needs a connection to reach the model. Check your network, then retry.</string>
+    <string name="error_rate_title">The free tier needs a breather.</string>
+    <string name="error_rate_body">OpenRouter caps free requests per minute. A short pause clears it.</string>
+    <string name="error_model_title">%1$s isn’t answering.</string>
+    <string name="error_model_body">Free models queue under load. Retry, or pick a different model in Settings.</string>
+    <string name="error_key_missing_title">No API key for this model.</string>
+    <string name="error_key_missing_body">Add one under Settings → API keys — even free models need a key behind them.</string>
+    <string name="error_key_invalid_title">The provider rejected your key.</string>
+    <string name="error_key_invalid_body">It may have been revoked. Check it under Settings → API keys.</string>
+    <string name="error_empty_title">The model returned nothing.</string>
+    <string name="error_empty_body">Free providers do that under load. Retrying usually fixes it.</string>
+    <string name="error_lang_title">Offline can’t do this pair.</string>
+    <string name="error_lang_body">On-device translation covers a fixed set of languages. Pick another pair, or switch to an online model in Settings.</string>
+    <string name="error_unknown_title">Something broke mid-translation.</string>
+    <string name="error_unknown_body">Not your fault. Retry, or switch models if it keeps happening.</string>
+    <string name="action_retry">Retry</string>
+    <string name="action_switch_model">Switch model</string>
+
+    <!-- Language picker -->
+    <string name="picker_close">Close picker</string>
+    <string name="picker_from">From</string>
+    <string name="picker_to">To</string>
+    <string name="picker_search_hint">Search languages</string>
+    <string name="picker_search_clear">Clear search</string>
+    <string name="picker_detect_subtitle">Let the model figure it out</string>
+    <string name="picker_selected">Currently selected</string>
+    <string name="picker_no_match_title">No language called “%1$s”.</string>
+    <string name="picker_no_match_body">Try its English name or its own name.</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_back">Back</string>
+    <string name="settings_section_theme">Theme</string>
+    <string name="settings_section_model">Model</string>
+    <string name="settings_section_keys">API keys</string>
+    <string name="settings_section_offline">Offline languages</string>
+    <string name="settings_section_about">About</string>
+
+    <!-- About: source and contact rows -->
+    <string name="about_source_title">Source code</string>
+    <string name="about_source_subtitle">github.com/Azyrn/Verba</string>
+    <string name="about_source_url">https://github.com/Azyrn/Verba</string>
+    <string name="about_telegram_title">Telegram</string>
+    <string name="about_telegram_subtitle">Report bugs or request features</string>
+    <string name="about_telegram_url">https://t.me/necotinx</string>
+    <string name="about_open_link">Open link</string>
+
+    <!-- On-device language model downloads for the Offline engine -->
+    <string name="offline_download">Download</string>
+    <string name="offline_remove">Remove download</string>
+
+    <!-- BYOK credential rows: one flow for every provider — key + model id + test -->
+    <string name="keys_add_hint">Add a key and a model id to translate on %1$s</string>
+    <string name="keys_add_subtitle_openrouter">Your own key and model lift the shared free-tier limits</string>
+    <string name="keys_verified_subtitle">%1$s · key ····%2$s</string>
+    <string name="keys_field_key">API key</string>
+    <string name="keys_field_model">Model ID</string>
+    <string name="keys_test">Test</string>
+    <string name="keys_remove">Remove key</string>
+    <string name="keys_model_hint">e.g. %1$s</string>
+    <string name="model_custom_subtitle">Your own model id · %1$s</string>
+
+    <!-- Credential test failures: one clear line per verdict -->
+    <string name="keys_err_key">%1$s rejected the key — check it, or that it may use this model.</string>
+    <string name="keys_err_model">%1$s has no model “%2$s” — check the id.</string>
+    <string name="keys_err_rate">%1$s is rate-limiting or out of quota — wait, then test again.</string>
+    <string name="keys_err_network">Couldn\'t reach %1$s — check your connection.</string>
+    <string name="keys_err_unknown">%1$s couldn\'t verify that pair — try again.</string>
+    <string name="theme_system">Match system</string>
+    <string name="theme_system_subtitle">Follows your device setting</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_light_subtitle">Paper white, lapis ink</string>
+    <string name="theme_dark">Dark</string>
+    <string name="theme_dark_subtitle">Deep charcoal, easy at night</string>
+    <string name="theme_black">True black</string>
+    <string name="theme_black_subtitle">Pixels off on OLED screens</string>
+
+    <!-- Model descriptions: honest speed/quality trade-offs -->
+    <string name="model_auto">OpenRouter picks a free model per request — best odds of a quick answer</string>
+    <string name="model_laguna_m">Poolside’s mid-size Laguna; even, careful phrasing at an unhurried pace</string>
+    <string name="model_nemotron_ultra">Huge 550B mixture — the most nuance here, and the longest wait for it</string>
+    <string name="model_nemotron_super">120B with 12B active — near-Ultra quality at an everyday speed</string>
+    <string name="model_laguna_xs2">Small Laguna; quick with phrases, thinner on idiom and long text</string>
+    <string name="model_gemma_31b">Steady all-rounder; strongest on European languages</string>
+    <string name="model_laguna_xs21">Refreshed small Laguna — a touch sharper than XS.2, just as quick</string>
+    <string name="model_north_mini">Cohere’s code model; fast but literal — fine for plain sentences</string>
+    <string name="model_gpt_oss_20b">Light GPT-OSS; snappy, can clip longer passages short</string>
+    <string name="model_gpt_oss_120b">Bigger GPT-OSS; steadier on long passages and idiom, a bit slower</string>
+    <string name="model_gemma_26b">Sparse Gemma, 4B active — small-model speed with bigger-model tone</string>
+    <string name="model_qwen3_next">Best of the set for Chinese, Japanese and Korean, and still quick</string>
+    <string name="model_offline">On-device ML Kit — no connection needed once the language pair is downloaded</string>
+
+    <!-- BYOK models: same honesty, your key pays for them -->
+    <string name="model_gpt51">OpenAI\'s flagship — superb idiom; billed to your OpenAI key</string>
+    <string name="model_gpt5_mini">Fast and cheap on your OpenAI key; fine for everyday phrases</string>
+    <string name="model_sonnet5">Anthropic\'s workhorse — natural register and tone on your key</string>
+    <string name="model_haiku45">Anthropic\'s quick tier; strong for its speed, gentle on cost</string>
+    <string name="model_gemini3_pro">Google\'s top model — wide language coverage on your Google key</string>
+    <string name="model_gemini_flash">Quick Gemini; solid quality at very low per-request cost</string>
+</resources>
