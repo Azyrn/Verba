@@ -29,6 +29,8 @@ import com.skeler.verba.model.LanguageSide
 import com.skeler.verba.ui.home.HomeScreen
 import com.skeler.verba.ui.home.HomeViewModel
 import com.skeler.verba.ui.picker.LanguagePickerScreen
+import com.skeler.verba.ui.saved.SavedScreen
+import com.skeler.verba.ui.saved.SavedViewModel
 import com.skeler.verba.ui.settings.SettingsScreen
 import com.skeler.verba.ui.settings.SettingsViewModel
 import kotlin.math.pow
@@ -37,6 +39,7 @@ sealed interface Screen {
     data object Home : Screen
     data class Picker(val side: LanguageSide) : Screen
     data object Settings : Screen
+    data object Saved : Screen
 }
 
 private val ScreenSaver = Saver<Screen, String>(
@@ -44,12 +47,14 @@ private val ScreenSaver = Saver<Screen, String>(
         when (screen) {
             Screen.Home -> "home"
             Screen.Settings -> "settings"
+            Screen.Saved -> "saved"
             is Screen.Picker -> "picker:${screen.side.name}"
         }
     },
     restore = { value ->
         when {
             value == "settings" -> Screen.Settings
+            value == "saved" -> Screen.Saved
             value.startsWith("picker:") ->
                 Screen.Picker(LanguageSide.valueOf(value.removePrefix("picker:")))
             else -> Screen.Home
@@ -94,6 +99,7 @@ private fun axisExit(toLeading: Boolean): ExitTransition = slideOutHorizontally(
 fun VerbaApp() {
     val homeViewModel: HomeViewModel = hiltViewModel()
     val settingsViewModel: SettingsViewModel = hiltViewModel()
+    val savedViewModel: SavedViewModel = hiltViewModel()
 
     var screen by rememberSaveable(stateSaver = ScreenSaver) { mutableStateOf<Screen>(Screen.Home) }
 
@@ -132,6 +138,7 @@ fun VerbaApp() {
                 onRetry = homeViewModel::retry,
                 onOpenPicker = { side -> screen = Screen.Picker(side) },
                 onOpenSettings = { screen = Screen.Settings },
+                onOpenSaved = { screen = Screen.Saved },
             )
 
             is Screen.Picker -> LanguagePickerScreen(
@@ -146,6 +153,11 @@ fun VerbaApp() {
 
             Screen.Settings -> SettingsScreen(
                 viewModel = settingsViewModel,
+                onBack = { screen = Screen.Home },
+            )
+
+            Screen.Saved -> SavedScreen(
+                viewModel = savedViewModel,
                 onBack = { screen = Screen.Home },
             )
         }

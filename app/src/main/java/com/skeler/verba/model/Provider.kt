@@ -49,6 +49,12 @@ enum class Provider(
         keyHint = "…",
         probeModel = "mistral-small-latest",
     ),
+    DEEPSEEK(
+        displayName = "DeepSeek",
+        chatUrl = "https://api.deepseek.com/v1/chat/completions",
+        keyHint = "sk-…",
+        probeModel = "deepseek-v4-flash",
+    ),
     MLKIT(
         displayName = "On-device",
         chatUrl = "",

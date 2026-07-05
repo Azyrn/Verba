@@ -70,6 +70,7 @@ fun HomeScreen(
     onRetry: () -> Unit,
     onOpenPicker: (LanguageSide) -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenSaved: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -86,6 +87,14 @@ fun HomeScreen(
                     pair = pair,
                     onOpenPicker = onOpenPicker,
                     onSwap = onSwapLanguages,
+                )
+            }
+            IconButton(onClick = onOpenSaved) {
+                Icon(
+                    imageVector = VerbaIcons.Bookmark,
+                    contentDescription = stringResource(R.string.saved_open),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(21.dp),
                 )
             }
             IconButton(onClick = onOpenSettings) {

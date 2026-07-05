@@ -17,6 +17,13 @@
     <string name="result_saved">Saved</string>
     <string name="result_removed">Removed</string>
 
+    <!-- Saved -->
+    <string name="saved_open">Saved translations</string>
+    <string name="saved_title">Saved</string>
+    <string name="saved_delete">Delete saved translation</string>
+    <string name="saved_empty_title">No saved translations yet.</string>
+    <string name="saved_empty_body">Tap the bookmark under any translation to keep it here.</string>
+
     <!-- Result: empty -->
     <string name="result_empty_title">Nothing to translate yet.</string>
     <string name="result_empty_body">Type above and the %1$s version lands here.</string>
@@ -63,6 +70,10 @@
     <string name="settings_section_keys">API keys</string>
     <string name="settings_section_offline">Offline languages</string>
     <string name="settings_section_about">About</string>
+    <string name="settings_summary_keys_none">None connected</string>
+    <string name="settings_summary_keys">%1$d connected</string>
+    <string name="settings_summary_offline_none">%1$d available</string>
+    <string name="settings_summary_offline">%1$d of %2$d downloaded</string>
 
     <!-- About: source and contact rows -->
     <string name="about_source_title">Source code</string>
@@ -72,6 +83,7 @@
     <string name="about_telegram_subtitle">Report bugs or request features</string>
     <string name="about_telegram_url">https://t.me/necotinx</string>
     <string name="about_open_link">Open link</string>
+    <string name="about_version">Verba %1$s (%2$d)</string>
 
     <!-- On-device language model downloads for the Offline engine -->
     <string name="offline_download">Download</string>

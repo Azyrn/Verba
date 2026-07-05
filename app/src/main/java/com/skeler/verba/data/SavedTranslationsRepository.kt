@@ -61,6 +61,14 @@ class SavedTranslationsRepository @Inject constructor(
         return nowSaved
     }
 
+    /** Drops the entry and any twin of it from the list. */
+    suspend fun remove(entry: SavedTranslation) {
+        dataStore.edit { preferences ->
+            val current = decode(preferences[key])
+            preferences[key] = json.encodeToString(current.filterNot { it.matches(entry) })
+        }
+    }
+
     private fun decode(raw: String?): List<SavedTranslation> {
         if (raw.isNullOrBlank()) return emptyList()
         return try {

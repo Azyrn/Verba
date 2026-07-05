@@ -2,6 +2,7 @@ package com.skeler.verba.ui.settings
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
@@ -62,13 +63,16 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.skeler.verba.BuildConfig
 import com.skeler.verba.R
 import com.skeler.verba.data.CredentialCheck
 import com.skeler.verba.data.OfflineLanguage
 import com.skeler.verba.model.Provider
 import com.skeler.verba.model.ThemeMode
+import com.skeler.verba.ui.theme.VerbaIcons
 
 /**
  * A short, flat list: theme, then model, then keys. Each section is one quiet
@@ -118,75 +122,113 @@ fun SettingsScreen(
 
         Spacer(Modifier.height(20.dp))
 
-        SectionLabel(stringResource(R.string.settings_section_theme))
-        SettingsCard {
-            ThemeMode.entries.forEachIndexed { index, mode ->
-                if (index > 0) RowDivider()
-                val (title, subtitle) = mode.copy()
-                ChoiceRow(
-                    title = title,
-                    subtitle = subtitle,
-                    selected = themeMode == mode,
-                    onClick = { viewModel.setThemeMode(mode) },
-                )
+        // One section open at a time: opening a group folds whichever was open,
+        // so the list never sprawls past a screen. Null keeps them all shut.
+        var expandedSection by rememberSaveable { mutableStateOf<String?>(null) }
+
+        CollapsibleSection(
+            label = stringResource(R.string.settings_section_theme),
+            summary = themeMode.copy().first,
+            expanded = expandedSection == "theme",
+            onToggle = { expandedSection = if (expandedSection == "theme") null else "theme" },
+        ) {
+            SettingsCard {
+                ThemeMode.entries.forEachIndexed { index, mode ->
+                    if (index > 0) RowDivider()
+                    val (title, subtitle) = mode.copy()
+                    ChoiceRow(
+                        title = title,
+                        subtitle = subtitle,
+                        selected = themeMode == mode,
+                        onClick = { viewModel.setThemeMode(mode) },
+                    )
+                }
             }
         }
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(16.dp))
 
-        SectionLabel(stringResource(R.string.settings_section_model))
-        SettingsCard(Modifier.animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec())) {
-            models.forEachIndexed { index, candidate ->
-                if (index > 0) RowDivider()
-                ChoiceRow(
-                    title = candidate.name,
-                    subtitle = candidate.description?.let { stringResource(it) }
-                        ?: stringResource(
-                            R.string.model_custom_subtitle,
-                            candidate.provider.displayName,
-                        ),
-                    selected = model.id == candidate.id,
-                    onClick = { viewModel.setModel(candidate) },
-                )
+        CollapsibleSection(
+            label = stringResource(R.string.settings_section_model),
+            summary = model.name,
+            expanded = expandedSection == "model",
+            onToggle = { expandedSection = if (expandedSection == "model") null else "model" },
+        ) {
+            SettingsCard(Modifier.animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec())) {
+                models.forEachIndexed { index, candidate ->
+                    if (index > 0) RowDivider()
+                    ChoiceRow(
+                        title = candidate.name,
+                        subtitle = candidate.description?.let { stringResource(it) }
+                            ?: stringResource(
+                                R.string.model_custom_subtitle,
+                                candidate.provider.displayName,
+                            ),
+                        selected = model.id == candidate.id,
+                        onClick = { viewModel.setModel(candidate) },
+                    )
+                }
             }
         }
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(16.dp))
 
-        SectionLabel(stringResource(R.string.settings_section_keys))
-        SettingsCard {
-            // One open at a time: tapping a provider closes whichever was open.
-            var expandedProvider by rememberSaveable { mutableStateOf<String?>(null) }
-            // On-device engines carry no key, so they never appear as a key row.
-            Provider.entries.filter { !it.onDevice }.forEachIndexed { index, provider ->
-                if (index > 0) RowDivider()
-                ProviderKeyRow(
-                    provider = provider,
-                    expanded = expandedProvider == provider.name,
-                    onExpand = { expandedProvider = provider.name },
-                    onCollapse = { if (expandedProvider == provider.name) expandedProvider = null },
-                    savedKey = apiKeys[provider],
-                    savedModel = customModels[provider],
-                    state = keyRows[provider] ?: KeyRowState.Idle,
-                    onTest = { key, model -> viewModel.test(provider, key, model) },
-                    onRemove = { viewModel.removeKey(provider) },
-                    onClearError = { viewModel.dismissKeyError(provider) },
-                )
+        val connectedKeys = Provider.entries.count {
+            !it.onDevice && apiKeys[it] != null && customModels[it] != null
+        }
+        CollapsibleSection(
+            label = stringResource(R.string.settings_section_keys),
+            summary = if (connectedKeys == 0) stringResource(R.string.settings_summary_keys_none)
+            else stringResource(R.string.settings_summary_keys, connectedKeys),
+            expanded = expandedSection == "keys",
+            onToggle = { expandedSection = if (expandedSection == "keys") null else "keys" },
+        ) {
+            SettingsCard {
+                // One open at a time: tapping a provider closes whichever was open.
+                var expandedProvider by rememberSaveable { mutableStateOf<String?>(null) }
+                // On-device engines carry no key, so they never appear as a key row.
+                Provider.entries.filter { !it.onDevice }.forEachIndexed { index, provider ->
+                    if (index > 0) RowDivider()
+                    ProviderKeyRow(
+                        provider = provider,
+                        expanded = expandedProvider == provider.name,
+                        onExpand = { expandedProvider = provider.name },
+                        onCollapse = { if (expandedProvider == provider.name) expandedProvider = null },
+                        savedKey = apiKeys[provider],
+                        savedModel = customModels[provider],
+                        state = keyRows[provider] ?: KeyRowState.Idle,
+                        onTest = { key, model -> viewModel.test(provider, key, model) },
+                        onRemove = { viewModel.removeKey(provider) },
+                        onClearError = { viewModel.dismissKeyError(provider) },
+                    )
+                }
             }
         }
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(16.dp))
 
-        SectionLabel(stringResource(R.string.settings_section_offline))
-        SettingsCard {
-            viewModel.offlineLanguages.forEachIndexed { index, offline ->
-                if (index > 0) RowDivider()
-                OfflineLanguageRow(
-                    offline = offline,
-                    state = downloads[offline.tag] ?: DownloadState.Absent,
-                    onDownload = { viewModel.downloadLanguage(offline.tag) },
-                    onDelete = { viewModel.deleteLanguage(offline.tag) },
-                )
+        val offlineTotal = viewModel.offlineLanguages.size
+        val offlineDownloaded = viewModel.offlineLanguages.count {
+            downloads[it.tag] == DownloadState.Present
+        }
+        CollapsibleSection(
+            label = stringResource(R.string.settings_section_offline),
+            summary = if (offlineDownloaded == 0)
+                stringResource(R.string.settings_summary_offline_none, offlineTotal)
+            else stringResource(R.string.settings_summary_offline, offlineDownloaded, offlineTotal),
+            expanded = expandedSection == "offline",
+            onToggle = { expandedSection = if (expandedSection == "offline") null else "offline" },
+        ) {
+            SettingsCard {
+                viewModel.offlineLanguages.forEachIndexed { index, offline ->
+                    if (index > 0) RowDivider()
+                    OfflineLanguageRow(
+                        offline = offline,
+                        state = downloads[offline.tag] ?: DownloadState.Absent,
+                        onDownload = { viewModel.downloadLanguage(offline.tag) },
+                        onDelete = { viewModel.deleteLanguage(offline.tag) },
+                    )
+                }
             }
         }
 
@@ -212,6 +254,23 @@ fun SettingsScreen(
                 onClick = { open(context.getString(R.string.about_telegram_url)) },
             )
         }
+
+        Spacer(Modifier.height(20.dp))
+
+        // The version, quiet at the foot: the name users see, the build behind it.
+        Text(
+            text = stringResource(
+                R.string.about_version,
+                BuildConfig.VERSION_NAME,
+                BuildConfig.VERSION_CODE,
+            ),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.outline,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp),
+        )
 
         Spacer(Modifier.height(32.dp))
     }
@@ -689,6 +748,66 @@ private fun CredentialField(
                 .height(1.dp)
                 .background(MaterialTheme.colorScheme.outlineVariant),
         )
+    }
+}
+
+/**
+ * A settings group folded behind its own header: the section name in lapis over
+ * a one-line summary of the current choice, with a chevron that rotates as the
+ * body slides open. Collapsed, every group is a single quiet row — the screen
+ * stays short no matter how long any one list is.
+ */
+@Composable
+private fun CollapsibleSection(
+    label: String,
+    summary: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    val rotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        label = "chevron",
+    )
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .clickable(onClick = onToggle)
+                .padding(horizontal = 8.dp, vertical = 12.dp),
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = label.uppercase(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    text = summary,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            Spacer(Modifier.size(12.dp))
+            Icon(
+                imageVector = VerbaIcons.ChevronDown,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.outline,
+                modifier = Modifier
+                    .size(24.dp)
+                    .graphicsLayer { rotationZ = rotation },
+            )
+        }
+        AnimatedVisibility(visible = expanded) {
+            Column {
+                Spacer(Modifier.height(4.dp))
+                content()
+            }
+        }
     }
 }
 
