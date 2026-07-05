@@ -1,3 +1,4 @@
+import com.android.build.api.variant.FilterConfiguration.FilterType.ABI
 import java.util.Properties
 
 plugins {
@@ -72,6 +73,21 @@ android {
             reset()
             include("arm64-v8a", "armeabi-v7a")
             isUniversalApk = true
+        }
+    }
+}
+
+// Distinct versionCode per ABI split so Play Store multi-apk upload works.
+// Universal apk keeps base versionCode; each split gets an offset.
+androidComponents {
+    onVariants(selector().withBuildType("release")) { variant ->
+        val abiCodes = mapOf("armeabi-v7a" to 1, "arm64-v8a" to 2)
+        variant.outputs.forEach { output ->
+            val abi = output.filters.find { it.filterType == ABI }?.identifier
+            val base = output.versionCode.get() ?: 0
+            abiCodes[abi]?.let { offset ->
+                output.versionCode.set(base * 10 + offset)
+            }
         }
     }
 }

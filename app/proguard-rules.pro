@@ -35,3 +35,16 @@
 -dontwarn com.google.errorprone.annotations.**
 
 # Hilt/Dagger ship their own consumer proguard rules — no manual keeps needed.
+
+# ---- ML Kit (translate + language-id) ----
+# ML Kit discovers its components through AndroidManifest meta-data that names
+# ComponentRegistrar implementations (CommonComponentRegistrar,
+# NaturalLanguageTranslateRegistrar, LanguageIdRegistrar, ThickLanguageIdRegistrar).
+# Those classes are only referenced by reflection, so R8 full-mode removes them and
+# RemoteModelManager.getInstance() throws NullPointerException at launch. Keep every
+# registrar (and its no-arg constructor, used to instantiate it).
+-keep class * implements com.google.firebase.components.ComponentRegistrar { *; }
+-keepclassmembers class * implements com.google.firebase.components.ComponentRegistrar {
+    <init>();
+}
+-dontwarn com.google.firebase.components.**

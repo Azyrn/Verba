@@ -9,3 +9,6 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Release build artifacts (published via GitHub Releases, not git)
+/app/release/
