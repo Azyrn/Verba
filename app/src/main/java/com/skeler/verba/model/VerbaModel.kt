@@ -7,8 +7,9 @@ import com.skeler.verba.R
  * A model Verba can route translations through. [description] is an honest
  * one-line account of the speed/quality trade-off, not marketing — it is null
  * for a [custom] model the user typed in, since only they know what it is. The
- * bundled list is OpenRouter's free tier; the rest unlock when the user adds
- * their own key for that [provider].
+ * bundled list is free for everyone — mostly OpenRouter's free tier, plus one
+ * Gemini model backed by an app-supplied key; the rest unlock when the user
+ * adds their own key for that [provider].
  */
 data class VerbaModel(
     val id: String,
@@ -26,47 +27,18 @@ data class VerbaModel(
 
 object VerbaModels {
 
-    /** The bundled free tier, available without any personal key. */
+    /**
+     * The bundled free tier, available without any personal key: two OpenRouter
+     * free models and one Gemini model paid for by the developer's own key, so
+     * it's shared across everyone running the app. [R.string.model_free_tier_note]
+     * on the Model screen is the one place that says so and points at API keys
+     * for a dedicated quota — keep that note if this list ever grows again.
+     */
     val all: List<VerbaModel> = listOf(
-        VerbaModel(
-            id = "openrouter/free",
-            name = "Auto",
-            description = R.string.model_auto,
-        ),
-        VerbaModel(
-            id = "poolside/laguna-m.1:free",
-            name = "Laguna M.1",
-            description = R.string.model_laguna_m,
-        ),
-        VerbaModel(
-            id = "nvidia/nemotron-3-ultra-550b-a55b:free",
-            name = "Nemotron 3 Ultra",
-            description = R.string.model_nemotron_ultra,
-        ),
         VerbaModel(
             id = "nvidia/nemotron-3-super-120b-a12b:free",
             name = "Nemotron 3 Super",
             description = R.string.model_nemotron_super,
-        ),
-        VerbaModel(
-            id = "poolside/laguna-xs.2:free",
-            name = "Laguna XS.2",
-            description = R.string.model_laguna_xs2,
-        ),
-        VerbaModel(
-            id = "google/gemma-4-31b-it:free",
-            name = "Gemma 4 31B",
-            description = R.string.model_gemma_31b,
-        ),
-        VerbaModel(
-            id = "poolside/laguna-xs-2.1:free",
-            name = "Laguna XS 2.1",
-            description = R.string.model_laguna_xs21,
-        ),
-        VerbaModel(
-            id = "cohere/north-mini-code:free",
-            name = "North Mini Code",
-            description = R.string.model_north_mini,
         ),
         VerbaModel(
             id = "openai/gpt-oss-20b:free",
@@ -74,19 +46,10 @@ object VerbaModels {
             description = R.string.model_gpt_oss_20b,
         ),
         VerbaModel(
-            id = "openai/gpt-oss-120b:free",
-            name = "GPT-OSS 120B",
-            description = R.string.model_gpt_oss_120b,
-        ),
-        VerbaModel(
-            id = "google/gemma-4-26b-a4b-it:free",
-            name = "Gemma 4 26B",
-            description = R.string.model_gemma_26b,
-        ),
-        VerbaModel(
-            id = "qwen/qwen3-next-80b-a3b-instruct:free",
-            name = "Qwen3 Next 80B",
-            description = R.string.model_qwen3_next,
+            id = "gemini-3.1-flash-lite",
+            name = "Gemini 3.1 Flash Lite",
+            description = R.string.model_gemini_flash_lite,
+            provider = Provider.GOOGLE,
         ),
         VerbaModel(
             id = "mlkit/on-device",

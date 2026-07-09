@@ -2,10 +2,12 @@ package com.skeler.verba.ui.settings
 
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.animation.AnimatedVisibility
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -25,7 +27,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -47,6 +48,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -58,6 +60,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -72,12 +75,47 @@ import com.skeler.verba.data.CredentialCheck
 import com.skeler.verba.data.OfflineLanguage
 import com.skeler.verba.model.Provider
 import com.skeler.verba.model.ThemeMode
+import com.skeler.verba.ui.axisEnter
+import com.skeler.verba.ui.axisExit
 import com.skeler.verba.ui.theme.VerbaIcons
 
+/** The settings hub, plus the one detail screen it can drill into at a time. */
+private sealed interface SettingsRoute {
+    data object Hub : SettingsRoute
+    data object Theme : SettingsRoute
+    data object Model : SettingsRoute
+    data object Keys : SettingsRoute
+    data object Offline : SettingsRoute
+}
+
+private val SettingsRouteSaver = Saver<SettingsRoute, String>(
+    save = { route ->
+        when (route) {
+            SettingsRoute.Hub -> "hub"
+            SettingsRoute.Theme -> "theme"
+            SettingsRoute.Model -> "model"
+            SettingsRoute.Keys -> "keys"
+            SettingsRoute.Offline -> "offline"
+        }
+    },
+    restore = { value ->
+        when (value) {
+            "theme" -> SettingsRoute.Theme
+            "model" -> SettingsRoute.Model
+            "keys" -> SettingsRoute.Keys
+            "offline" -> SettingsRoute.Offline
+            else -> SettingsRoute.Hub
+        }
+    },
+)
+
 /**
- * A short, flat list: theme, then model, then keys. Each section is one quiet
- * card of rows; the active choice wears the lapis — a bright title and a check,
- * the same mark the language picker uses, so selection reads the same everywhere.
+ * Settings reads as a small app of its own: a hub of four category rows —
+ * Appearance, Model, API keys, Offline languages — each opening into its own
+ * screen with the same shared-axis push VerbaApp uses between top-level
+ * screens, so drilling in feels continuous with the rest of the app rather
+ * than a different navigation idiom bolted on. Only the hub carries About and
+ * the version footer; a detail screen is nothing but its one concern.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -93,143 +131,164 @@ fun SettingsScreen(
     val keyRows by viewModel.keyRows.collectAsStateWithLifecycle()
     val downloads by viewModel.downloads.collectAsStateWithLifecycle()
 
-    Column(
+    var route by rememberSaveable(stateSaver = SettingsRouteSaver) {
+        mutableStateOf<SettingsRoute>(SettingsRoute.Hub)
+    }
+    // A detail screen's back goes up to the hub, not out of Settings entirely;
+    // this handler only exists while it's needed, so the hub still falls
+    // through to VerbaApp's own back handler.
+    BackHandler(enabled = route != SettingsRoute.Hub) { route = SettingsRoute.Hub }
+
+    val connectedKeys = Provider.entries.count {
+        !it.onDevice && apiKeys[it] != null && customModels[it] != null
+    }
+    val offlineTotal = viewModel.offlineLanguages.size
+    val offlineDownloaded = viewModel.offlineLanguages.count {
+        downloads[it.tag] == DownloadState.Present
+    }
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .windowInsetsPadding(WindowInsets.safeDrawing)
-            .verticalScroll(rememberScrollState()),
+            .windowInsetsPadding(WindowInsets.safeDrawing),
     ) {
-        Spacer(Modifier.height(8.dp))
+        AnimatedContent(
+            targetState = route,
+            transitionSpec = {
+                val forward = targetState != SettingsRoute.Hub
+                axisEnter(fromLeading = !forward) togetherWith axisExit(toLeading = forward)
+            },
+            label = "settingsRoute",
+        ) { target ->
+            when (target) {
+                SettingsRoute.Hub -> SettingsHub(
+                    onBack = onBack,
+                    themeSummary = themeMode.copy().first,
+                    modelSummary = model.name,
+                    keysSummary = if (connectedKeys == 0) {
+                        stringResource(R.string.settings_summary_keys_none)
+                    } else {
+                        stringResource(R.string.settings_summary_keys, connectedKeys)
+                    },
+                    offlineSummary = if (offlineDownloaded == 0) {
+                        stringResource(R.string.settings_summary_offline_none, offlineTotal)
+                    } else {
+                        stringResource(R.string.settings_summary_offline, offlineDownloaded, offlineTotal)
+                    },
+                    onOpenTheme = { route = SettingsRoute.Theme },
+                    onOpenModel = { route = SettingsRoute.Model },
+                    onOpenKeys = { route = SettingsRoute.Keys },
+                    onOpenOffline = { route = SettingsRoute.Offline },
+                )
 
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 8.dp),
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = stringResource(R.string.settings_back),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                SettingsRoute.Theme -> ThemeSettingsScreen(
+                    onBack = { route = SettingsRoute.Hub },
+                    themeMode = themeMode,
+                    onSelect = viewModel::setThemeMode,
+                )
+
+                SettingsRoute.Model -> ModelSettingsScreen(
+                    onBack = { route = SettingsRoute.Hub },
+                    models = models,
+                    selected = model,
+                    onSelect = viewModel::setModel,
+                )
+
+                SettingsRoute.Keys -> KeysSettingsScreen(
+                    onBack = { route = SettingsRoute.Hub },
+                    apiKeys = apiKeys,
+                    customModels = customModels,
+                    keyRows = keyRows,
+                    onTest = viewModel::test,
+                    onRemove = viewModel::removeKey,
+                    onClearError = viewModel::dismissKeyError,
+                )
+
+                SettingsRoute.Offline -> OfflineSettingsScreen(
+                    onBack = { route = SettingsRoute.Hub },
+                    languages = viewModel.offlineLanguages,
+                    downloads = downloads,
+                    onDownload = viewModel::downloadLanguage,
+                    onDelete = viewModel::deleteLanguage,
                 )
             }
-            Text(
-                text = stringResource(R.string.settings_title),
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onBackground,
+        }
+    }
+}
+
+/** The header every Settings screen shares: a back arrow and a title. */
+@Composable
+private fun SettingsTopBar(title: String, onBack: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(horizontal = 8.dp),
+    ) {
+        IconButton(onClick = onBack) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                contentDescription = stringResource(R.string.settings_back),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+    }
+}
 
+/**
+ * The hub: four category rows, each a quiet lapis-tinted glyph, a title and
+ * the live state of that category, and a chevron. About and the version sit
+ * below, never behind a tap — they're links and a footnote, not a setting.
+ */
+@Composable
+private fun SettingsHub(
+    onBack: () -> Unit,
+    themeSummary: String,
+    modelSummary: String,
+    keysSummary: String,
+    offlineSummary: String,
+    onOpenTheme: () -> Unit,
+    onOpenModel: () -> Unit,
+    onOpenKeys: () -> Unit,
+    onOpenOffline: () -> Unit,
+) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Spacer(Modifier.height(8.dp))
+        SettingsTopBar(title = stringResource(R.string.settings_title), onBack = onBack)
         Spacer(Modifier.height(20.dp))
 
-        // One section open at a time: opening a group folds whichever was open,
-        // so the list never sprawls past a screen. Null keeps them all shut.
-        var expandedSection by rememberSaveable { mutableStateOf<String?>(null) }
-
-        CollapsibleSection(
-            label = stringResource(R.string.settings_section_theme),
-            summary = themeMode.copy().first,
-            expanded = expandedSection == "theme",
-            onToggle = { expandedSection = if (expandedSection == "theme") null else "theme" },
-        ) {
-            SettingsCard {
-                ThemeMode.entries.forEachIndexed { index, mode ->
-                    if (index > 0) RowDivider()
-                    val (title, subtitle) = mode.copy()
-                    ChoiceRow(
-                        title = title,
-                        subtitle = subtitle,
-                        selected = themeMode == mode,
-                        onClick = { viewModel.setThemeMode(mode) },
-                    )
-                }
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        CollapsibleSection(
-            label = stringResource(R.string.settings_section_model),
-            summary = model.name,
-            expanded = expandedSection == "model",
-            onToggle = { expandedSection = if (expandedSection == "model") null else "model" },
-        ) {
-            SettingsCard(Modifier.animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec())) {
-                models.forEachIndexed { index, candidate ->
-                    if (index > 0) RowDivider()
-                    ChoiceRow(
-                        title = candidate.name,
-                        subtitle = candidate.description?.let { stringResource(it) }
-                            ?: stringResource(
-                                R.string.model_custom_subtitle,
-                                candidate.provider.displayName,
-                            ),
-                        selected = model.id == candidate.id,
-                        onClick = { viewModel.setModel(candidate) },
-                    )
-                }
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        val connectedKeys = Provider.entries.count {
-            !it.onDevice && apiKeys[it] != null && customModels[it] != null
-        }
-        CollapsibleSection(
-            label = stringResource(R.string.settings_section_keys),
-            summary = if (connectedKeys == 0) stringResource(R.string.settings_summary_keys_none)
-            else stringResource(R.string.settings_summary_keys, connectedKeys),
-            expanded = expandedSection == "keys",
-            onToggle = { expandedSection = if (expandedSection == "keys") null else "keys" },
-        ) {
-            SettingsCard {
-                // One open at a time: tapping a provider closes whichever was open.
-                var expandedProvider by rememberSaveable { mutableStateOf<String?>(null) }
-                // On-device engines carry no key, so they never appear as a key row.
-                Provider.entries.filter { !it.onDevice }.forEachIndexed { index, provider ->
-                    if (index > 0) RowDivider()
-                    ProviderKeyRow(
-                        provider = provider,
-                        expanded = expandedProvider == provider.name,
-                        onExpand = { expandedProvider = provider.name },
-                        onCollapse = { if (expandedProvider == provider.name) expandedProvider = null },
-                        savedKey = apiKeys[provider],
-                        savedModel = customModels[provider],
-                        state = keyRows[provider] ?: KeyRowState.Idle,
-                        onTest = { key, model -> viewModel.test(provider, key, model) },
-                        onRemove = { viewModel.removeKey(provider) },
-                        onClearError = { viewModel.dismissKeyError(provider) },
-                    )
-                }
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        val offlineTotal = viewModel.offlineLanguages.size
-        val offlineDownloaded = viewModel.offlineLanguages.count {
-            downloads[it.tag] == DownloadState.Present
-        }
-        CollapsibleSection(
-            label = stringResource(R.string.settings_section_offline),
-            summary = if (offlineDownloaded == 0)
-                stringResource(R.string.settings_summary_offline_none, offlineTotal)
-            else stringResource(R.string.settings_summary_offline, offlineDownloaded, offlineTotal),
-            expanded = expandedSection == "offline",
-            onToggle = { expandedSection = if (expandedSection == "offline") null else "offline" },
-        ) {
-            SettingsCard {
-                viewModel.offlineLanguages.forEachIndexed { index, offline ->
-                    if (index > 0) RowDivider()
-                    OfflineLanguageRow(
-                        offline = offline,
-                        state = downloads[offline.tag] ?: DownloadState.Absent,
-                        onDownload = { viewModel.downloadLanguage(offline.tag) },
-                        onDelete = { viewModel.deleteLanguage(offline.tag) },
-                    )
-                }
-            }
+        SettingsCard {
+            HubRow(
+                icon = VerbaIcons.Brightness,
+                title = stringResource(R.string.settings_section_theme),
+                value = themeSummary,
+                onClick = onOpenTheme,
+            )
+            RowDivider()
+            HubRow(
+                icon = VerbaIcons.Sparkle,
+                title = stringResource(R.string.settings_section_model),
+                value = modelSummary,
+                onClick = onOpenModel,
+            )
+            RowDivider()
+            HubRow(
+                icon = VerbaIcons.Key,
+                title = stringResource(R.string.settings_section_keys),
+                value = keysSummary,
+                onClick = onOpenKeys,
+            )
+            RowDivider()
+            HubRow(
+                icon = VerbaIcons.Download,
+                title = stringResource(R.string.settings_section_offline),
+                value = offlineSummary,
+                onClick = onOpenOffline,
+            )
         }
 
         Spacer(Modifier.height(24.dp))
@@ -257,7 +316,6 @@ fun SettingsScreen(
 
         Spacer(Modifier.height(20.dp))
 
-        // The version, quiet at the foot: the name users see, the build behind it.
         Text(
             text = stringResource(
                 R.string.about_version,
@@ -273,6 +331,192 @@ fun SettingsScreen(
         )
 
         Spacer(Modifier.height(32.dp))
+    }
+}
+
+@Composable
+private fun ThemeSettingsScreen(
+    onBack: () -> Unit,
+    themeMode: ThemeMode,
+    onSelect: (ThemeMode) -> Unit,
+) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Spacer(Modifier.height(8.dp))
+        SettingsTopBar(title = stringResource(R.string.settings_section_theme), onBack = onBack)
+        Spacer(Modifier.height(20.dp))
+        SettingsCard {
+            ThemeMode.entries.forEachIndexed { index, mode ->
+                if (index > 0) RowDivider()
+                val (title, subtitle) = mode.copy()
+                ChoiceRow(
+                    title = title,
+                    subtitle = subtitle,
+                    selected = themeMode == mode,
+                    onClick = { onSelect(mode) },
+                )
+            }
+        }
+        Spacer(Modifier.height(32.dp))
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun ModelSettingsScreen(
+    onBack: () -> Unit,
+    models: List<com.skeler.verba.model.VerbaModel>,
+    selected: com.skeler.verba.model.VerbaModel,
+    onSelect: (com.skeler.verba.model.VerbaModel) -> Unit,
+) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Spacer(Modifier.height(8.dp))
+        SettingsTopBar(title = stringResource(R.string.settings_section_model), onBack = onBack)
+        Spacer(Modifier.height(20.dp))
+        Text(
+            text = stringResource(R.string.model_free_tier_note),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 24.dp),
+        )
+        Spacer(Modifier.height(16.dp))
+        SettingsCard(Modifier.animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec())) {
+            models.forEachIndexed { index, candidate ->
+                if (index > 0) RowDivider()
+                ChoiceRow(
+                    title = candidate.name,
+                    subtitle = candidate.description?.let { stringResource(it) }
+                        ?: stringResource(
+                            R.string.model_custom_subtitle,
+                            candidate.provider.displayName,
+                        ),
+                    selected = selected.id == candidate.id,
+                    onClick = { onSelect(candidate) },
+                )
+            }
+        }
+        Spacer(Modifier.height(32.dp))
+    }
+}
+
+@Composable
+private fun KeysSettingsScreen(
+    onBack: () -> Unit,
+    apiKeys: Map<Provider, String>,
+    customModels: Map<Provider, String>,
+    keyRows: Map<Provider, KeyRowState>,
+    onTest: (Provider, String, String) -> Unit,
+    onRemove: (Provider) -> Unit,
+    onClearError: (Provider) -> Unit,
+) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Spacer(Modifier.height(8.dp))
+        SettingsTopBar(title = stringResource(R.string.settings_section_keys), onBack = onBack)
+        Spacer(Modifier.height(20.dp))
+        SettingsCard {
+            // One open at a time: tapping a provider closes whichever was open.
+            var expandedProvider by rememberSaveable { mutableStateOf<String?>(null) }
+            // On-device engines carry no key, so they never appear as a key row.
+            Provider.entries.filter { !it.onDevice }.forEachIndexed { index, provider ->
+                if (index > 0) RowDivider()
+                ProviderKeyRow(
+                    provider = provider,
+                    expanded = expandedProvider == provider.name,
+                    onExpand = { expandedProvider = provider.name },
+                    onCollapse = { if (expandedProvider == provider.name) expandedProvider = null },
+                    savedKey = apiKeys[provider],
+                    savedModel = customModels[provider],
+                    state = keyRows[provider] ?: KeyRowState.Idle,
+                    onTest = { key, model -> onTest(provider, key, model) },
+                    onRemove = { onRemove(provider) },
+                    onClearError = { onClearError(provider) },
+                )
+            }
+        }
+        Spacer(Modifier.height(32.dp))
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun OfflineSettingsScreen(
+    onBack: () -> Unit,
+    languages: List<OfflineLanguage>,
+    downloads: Map<String, DownloadState>,
+    onDownload: (String) -> Unit,
+    onDelete: (String) -> Unit,
+) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Spacer(Modifier.height(8.dp))
+        SettingsTopBar(title = stringResource(R.string.settings_section_offline), onBack = onBack)
+        Spacer(Modifier.height(20.dp))
+        SettingsCard {
+            languages.forEachIndexed { index, offline ->
+                if (index > 0) RowDivider()
+                OfflineLanguageRow(
+                    offline = offline,
+                    state = downloads[offline.tag] ?: DownloadState.Absent,
+                    onDownload = { onDownload(offline.tag) },
+                    onDelete = { onDelete(offline.tag) },
+                )
+            }
+        }
+        Spacer(Modifier.height(32.dp))
+    }
+}
+
+/**
+ * One hub category row: a soft lapis-tinted glyph tile on the left — the
+ * house style, distinct from the per-provider brand tiles inside API keys —
+ * the category name, its live value beneath, and a static disclosure chevron.
+ */
+@Composable
+private fun HubRow(
+    icon: ImageVector,
+    title: String,
+    value: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        Spacer(Modifier.size(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.size(12.dp))
+        Icon(
+            imageVector = VerbaIcons.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.size(22.dp),
+        )
     }
 }
 
@@ -527,6 +771,46 @@ private fun ChoiceRow(
 }
 
 /**
+ * The flat color and real wordmark that stand in for each provider's logo —
+ * traced into [VerbaIcons] from lobehub's MIT-licensed icon set, not an
+ * invented monogram. The hue is fixed regardless of theme, the way a real
+ * logo would be.
+ */
+private data class ProviderBrand(val color: Color, val icon: ImageVector)
+
+private val Provider.brand: ProviderBrand
+    get() = when (this) {
+        Provider.OPENROUTER -> ProviderBrand(Color(0xFF6467F2), VerbaIcons.LogoOpenRouter)
+        Provider.OPENAI -> ProviderBrand(Color(0xFF10A37F), VerbaIcons.LogoOpenAi)
+        Provider.ANTHROPIC -> ProviderBrand(Color(0xFFCC785C), VerbaIcons.LogoAnthropic)
+        Provider.GOOGLE -> ProviderBrand(Color(0xFF4285F4), VerbaIcons.LogoGoogle)
+        Provider.MISTRAL -> ProviderBrand(Color(0xFFFA6400), VerbaIcons.LogoMistral)
+        Provider.DEEPSEEK -> ProviderBrand(Color(0xFF4D6BFE), VerbaIcons.LogoDeepSeek)
+        Provider.CEREBRAS -> ProviderBrand(Color(0xFFF15A29), VerbaIcons.LogoCerebras)
+        Provider.MLKIT -> ProviderBrand(Color(0xFF757575), VerbaIcons.LogoOpenRouter)
+    }
+
+/** A provider's brand tile: its real logo on a soft wash of its own color. */
+@Composable
+private fun ProviderBrandTile(provider: Provider) {
+    val brand = provider.brand
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(40.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(brand.color.copy(alpha = 0.16f)),
+    ) {
+        Icon(
+            imageVector = brand.icon,
+            contentDescription = null,
+            tint = brand.color,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+/**
  * One provider, one uniform flow for all of them: a key and a model id, tested
  * together against the live API. It rests as a quiet connected line — the model
  * it answers with, and the last four of the key — and opens on tap into the two
@@ -564,6 +848,8 @@ private fun ProviderKeyRow(
             .padding(horizontal = 20.dp, vertical = 14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            ProviderBrandTile(provider)
+            Spacer(Modifier.size(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     text = provider.displayName,
@@ -579,8 +865,10 @@ private fun ProviderKeyRow(
                                 savedModel.orEmpty(),
                                 savedKey.orEmpty().takeLast(4),
                             )
-                            provider == Provider.OPENROUTER ->
-                                stringResource(R.string.keys_add_subtitle_openrouter)
+                            // Both ship a free bundled model backed by a shared key;
+                            // a personal key here buys a quota of the user's own.
+                            provider == Provider.OPENROUTER || provider == Provider.GOOGLE ->
+                                stringResource(R.string.keys_add_subtitle_shared_free)
                             else -> stringResource(R.string.keys_add_hint, provider.displayName)
                         },
                         style = MaterialTheme.typography.bodyMedium,
@@ -748,66 +1036,6 @@ private fun CredentialField(
                 .height(1.dp)
                 .background(MaterialTheme.colorScheme.outlineVariant),
         )
-    }
-}
-
-/**
- * A settings group folded behind its own header: the section name in lapis over
- * a one-line summary of the current choice, with a chevron that rotates as the
- * body slides open. Collapsed, every group is a single quiet row — the screen
- * stays short no matter how long any one list is.
- */
-@Composable
-private fun CollapsibleSection(
-    label: String,
-    summary: String,
-    expanded: Boolean,
-    onToggle: () -> Unit,
-    content: @Composable () -> Unit,
-) {
-    val rotation by animateFloatAsState(
-        targetValue = if (expanded) 180f else 0f,
-        label = "chevron",
-    )
-    Column(Modifier.fillMaxWidth()) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .clickable(onClick = onToggle)
-                .padding(horizontal = 8.dp, vertical = 12.dp),
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = label.uppercase(),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    text = summary,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-            Spacer(Modifier.size(12.dp))
-            Icon(
-                imageVector = VerbaIcons.ChevronDown,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.outline,
-                modifier = Modifier
-                    .size(24.dp)
-                    .graphicsLayer { rotationZ = rotation },
-            )
-        }
-        AnimatedVisibility(visible = expanded) {
-            Column {
-                Spacer(Modifier.height(4.dp))
-                content()
-            }
-        }
     }
 }
 

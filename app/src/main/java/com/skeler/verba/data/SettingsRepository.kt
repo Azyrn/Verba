@@ -42,7 +42,10 @@ class SettingsRepository @Inject constructor(
     /**
      * The selected model, falling back to the default if its provider's key
      * has since been removed — a BYOK model without a key can never answer —
-     * or if it was a hand-typed model the user has since cleared.
+     * or if it was a hand-typed model the user has since cleared. Anything in
+     * the bundled free tier ([VerbaModels.all]) is always unlocked, whichever
+     * provider backs it — that's what makes it free — so only a preset from
+     * [VerbaModels.byok] or a hand-typed id needs a personal key to stick.
      */
     val model: Flow<VerbaModel> = dataStore.data
         .map { preferences ->
@@ -50,8 +53,7 @@ class SettingsRepository @Inject constructor(
             val selected = VerbaModels.preset(id)
                 ?: preferences.customSelection(id)
                 ?: VerbaModels.default
-            val unlocked = selected.provider == Provider.OPENROUTER ||
-                selected.provider.onDevice ||
+            val unlocked = VerbaModels.all.any { it.id == selected.id } ||
                 !preferences[Keys.apiKey(selected.provider)].isNullOrBlank()
             if (unlocked) selected else VerbaModels.default
         }

@@ -81,14 +81,16 @@ internal const val SHEET_ENTER_MILLIS: Long = AXIS_DURATION_MS.toLong()
 private fun axisDistance(fullWidth: Int): Int =
     (fullWidth * AXIS_DISTANCE_FRACTION).toInt()
 
-private fun axisEnter(fromLeading: Boolean): EnterTransition = slideInHorizontally(
+// internal, not private: Settings reuses this exact transition for its own
+// hub → detail navigation, so the two nesting levels feel like one language.
+internal fun axisEnter(fromLeading: Boolean): EnterTransition = slideInHorizontally(
     animationSpec = tween(AXIS_DURATION_MS, easing = EaseOutExpo),
     initialOffsetX = { if (fromLeading) -axisDistance(it) else axisDistance(it) },
 ) + fadeIn(
     animationSpec = tween(FADE_IN_DURATION_MS, delayMillis = FADE_IN_DELAY_MS, easing = LinearOutSlowInEasing),
 )
 
-private fun axisExit(toLeading: Boolean): ExitTransition = slideOutHorizontally(
+internal fun axisExit(toLeading: Boolean): ExitTransition = slideOutHorizontally(
     animationSpec = tween(AXIS_DURATION_MS, easing = EaseOutExpo),
     targetOffsetX = { if (toLeading) -axisDistance(it) else axisDistance(it) },
 ) + fadeOut(

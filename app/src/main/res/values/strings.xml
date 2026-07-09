@@ -91,7 +91,7 @@
 
     <!-- BYOK credential rows: one flow for every provider — key + model id + test -->
     <string name="keys_add_hint">Add a key and a model id to translate on %1$s</string>
-    <string name="keys_add_subtitle_openrouter">Your own key and model lift the shared free-tier limits</string>
+    <string name="keys_add_subtitle_shared_free">Your own key and model lift the shared free-tier limits</string>
     <string name="keys_verified_subtitle">%1$s · key ····%2$s</string>
     <string name="keys_field_key">API key</string>
     <string name="keys_field_model">Model ID</string>
@@ -116,19 +116,11 @@
     <string name="theme_black_subtitle">Pixels off on OLED screens</string>
 
     <!-- Model descriptions: honest speed/quality trade-offs -->
-    <string name="model_auto">OpenRouter picks a free model per request — best odds of a quick answer</string>
-    <string name="model_laguna_m">Poolside’s mid-size Laguna; even, careful phrasing at an unhurried pace</string>
-    <string name="model_nemotron_ultra">Huge 550B mixture — the most nuance here, and the longest wait for it</string>
     <string name="model_nemotron_super">120B with 12B active — near-Ultra quality at an everyday speed</string>
-    <string name="model_laguna_xs2">Small Laguna; quick with phrases, thinner on idiom and long text</string>
-    <string name="model_gemma_31b">Steady all-rounder; strongest on European languages</string>
-    <string name="model_laguna_xs21">Refreshed small Laguna — a touch sharper than XS.2, just as quick</string>
-    <string name="model_north_mini">Cohere’s code model; fast but literal — fine for plain sentences</string>
     <string name="model_gpt_oss_20b">Light GPT-OSS; snappy, can clip longer passages short</string>
-    <string name="model_gpt_oss_120b">Bigger GPT-OSS; steadier on long passages and idiom, a bit slower</string>
-    <string name="model_gemma_26b">Sparse Gemma, 4B active — small-model speed with bigger-model tone</string>
-    <string name="model_qwen3_next">Best of the set for Chinese, Japanese and Korean, and still quick</string>
+    <string name="model_gemini_flash_lite">Google\'s newest light Flash — quick and capable, not their flagship depth</string>
     <string name="model_offline">On-device ML Kit — no connection needed once the language pair is downloaded</string>
+    <string name="model_free_tier_note">These models are free because the developer pays for them with their own API keys, shared by every person using the app — so replies can slow down when it\'s busy. Add your own key under API keys to translate on your own quota instead of the shared one.</string>
 
     <!-- BYOK models: same honesty, your key pays for them -->
     <string name="model_gpt51">OpenAI\'s flagship — superb idiom; billed to your OpenAI key</string>

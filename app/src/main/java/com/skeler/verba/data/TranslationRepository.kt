@@ -85,14 +85,19 @@ class TranslationRepository @Inject constructor(
     }
 
     /**
-     * A personal key always wins; the bundled OpenRouter key backs the free
-     * tier when the user hasn't added their own.
+     * A personal key always wins; a bundled key backs whichever free-tier
+     * models ship with the app when the user hasn't added their own.
      */
     private suspend fun keyFor(provider: Provider): String? {
         val personal = settings.apiKey(provider).first()
         if (personal != null) return personal
-        return BuildConfig.OPENROUTER_API_KEY
-            .takeIf { provider == Provider.OPENROUTER && it.isNotBlank() }
+        return bundledKeyFor(provider)
+    }
+
+    private fun bundledKeyFor(provider: Provider): String? = when (provider) {
+        Provider.OPENROUTER -> BuildConfig.OPENROUTER_API_KEY.takeIf { it.isNotBlank() }
+        Provider.GOOGLE -> BuildConfig.GEMINI_API_KEY.takeIf { it.isNotBlank() }
+        else -> null
     }
 
     private fun errorForStatus(code: Int): TranslationError = when (code) {

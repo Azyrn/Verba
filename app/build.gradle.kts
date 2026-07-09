@@ -32,6 +32,11 @@ android {
             "OPENROUTER_API_KEY",
             "\"${localProperties.getProperty("openrouter.apiKey").orEmpty()}\"",
         )
+        buildConfigField(
+            "String",
+            "GEMINI_API_KEY",
+            "\"${localProperties.getProperty("gemini.apiKey").orEmpty()}\"",
+        )
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

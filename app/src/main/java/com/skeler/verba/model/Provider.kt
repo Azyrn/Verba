@@ -55,6 +55,12 @@ enum class Provider(
         keyHint = "sk-…",
         probeModel = "deepseek-v4-flash",
     ),
+    CEREBRAS(
+        displayName = "Cerebras",
+        chatUrl = "https://api.cerebras.ai/v1/chat/completions",
+        keyHint = "csk-…",
+        probeModel = "gemma-4-31b",
+    ),
     MLKIT(
         displayName = "On-device",
         chatUrl = "",
