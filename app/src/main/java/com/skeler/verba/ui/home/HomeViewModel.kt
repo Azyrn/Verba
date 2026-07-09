@@ -51,6 +51,18 @@ class HomeViewModel @Inject constructor(
     val model: StateFlow<VerbaModel> = settings.model
         .stateIn(viewModelScope, SharingStarted.Eagerly, VerbaModels.default)
 
+    /**
+     * Whether [model] is actually spending the developer's shared quota right
+     * now — false the moment its provider has a personal key, even for a
+     * bundled model id, since a personal key always wins at request time.
+     */
+    val modelUsesSharedKey: StateFlow<Boolean> = combine(
+        model,
+        settings.apiKeys,
+    ) { currentModel, keys ->
+        VerbaModels.usesSharedKey(currentModel, keys.keys)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
     private val retryTicker = MutableStateFlow(0)
 
     /** Last successful translation, kept visible under loading and error states. */

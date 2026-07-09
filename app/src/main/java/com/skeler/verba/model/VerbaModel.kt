@@ -59,7 +59,12 @@ object VerbaModels {
         ),
     )
 
-    /** Bring-your-own-key models, listed only once their provider has a key. */
+    /**
+     * Known bring-your-own-key model ids, kept only to recognize a typed id
+     * as one of these (for [preset] and [byId]) — never shown in
+     * [available] itself, which lists just the exact model each provider's
+     * key was tested with.
+     */
     val byok: List<VerbaModel> = listOf(
         VerbaModel(
             id = "gpt-5.1",
@@ -102,18 +107,21 @@ object VerbaModels {
     val default: VerbaModel = all.first()
 
     /**
-     * One flat list: the free tier, the preset models the user's keys unlock,
-     * then any model ids they typed in themselves for an unlocked provider.
+     * One flat list: the free tier, then only the exact model id each unlocked
+     * provider's key was tested with — never the rest of that provider's
+     * catalog. A typed id that already matches a preset *for that same
+     * provider* is skipped, so retyping a known model doesn't duplicate its
+     * row; one that happens to match some other provider's preset id is a
+     * distinct model and stays listed.
      */
     fun available(
         unlocked: Set<Provider>,
         customModels: Map<Provider, String> = emptyMap(),
     ): List<VerbaModel> =
-        all + byok.filter { it.provider in unlocked } +
-            customModels.entries.mapNotNull { (provider, id) ->
-                id.takeIf { it.isNotBlank() && provider.isUnlocked(unlocked) }
-                    ?.let { VerbaModel.custom(provider, it) }
-            }
+        all + customModels.entries.mapNotNull { (provider, id) ->
+            id.takeIf { it.isNotBlank() && provider.isUnlocked(unlocked) && preset(provider, id) == null }
+                ?.let { VerbaModel.custom(provider, it) }
+        }
 
     private fun Provider.isUnlocked(unlocked: Set<Provider>): Boolean =
         this == Provider.OPENROUTER || onDevice || this in unlocked
@@ -121,8 +129,24 @@ object VerbaModels {
     /** How many rows a key for [provider] adds to the model list. */
     fun countFor(provider: Provider): Int = byok.count { it.provider == provider }
 
-    /** The preset model with [id], or null if it isn't one of ours. */
-    fun preset(id: String): VerbaModel? = (all + byok).firstOrNull { it.id == id }
+    /**
+     * The preset model with this exact [provider] and [id], or null if it isn't
+     * one of ours. Both must match — a typed id that coincidentally equals
+     * another provider's preset id is not that preset.
+     */
+    fun preset(provider: Provider, id: String): VerbaModel? =
+        (all + byok).firstOrNull { it.provider == provider && it.id == id }
 
-    fun byId(id: String): VerbaModel = preset(id) ?: default
+    fun byId(id: String): VerbaModel = (all + byok).firstOrNull { it.id == id } ?: default
+
+    /**
+     * True when a translation with this model draws on the developer's shared
+     * key rather than the user's own — the bundled tier, and only while its
+     * provider still has no personal key stored. A personal key always wins
+     * the moment one exists, even for a bundled id (see
+     * TranslationRepository.keyFor), so this is a request-time question, not
+     * a fixed property of the model by itself.
+     */
+    fun usesSharedKey(model: VerbaModel, keyedProviders: Set<Provider>): Boolean =
+        all.any { it.id == model.id } && model.provider !in keyedProviders
 }

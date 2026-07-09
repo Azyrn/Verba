@@ -50,7 +50,11 @@ class SettingsRepository @Inject constructor(
     val model: Flow<VerbaModel> = dataStore.data
         .map { preferences ->
             val id = preferences[Keys.Model].orEmpty()
-            val selected = VerbaModels.preset(id)
+            val provider = preferences.storedProvider()
+            // Preset lookup needs the stored provider too — a typed id that
+            // coincidentally matches another provider's preset id must not
+            // be mistaken for that preset (see VerbaModels.preset).
+            val selected = provider?.let { VerbaModels.preset(it, id) }
                 ?: preferences.customSelection(id)
                 ?: VerbaModels.default
             val unlocked = VerbaModels.all.any { it.id == selected.id } ||
@@ -59,6 +63,9 @@ class SettingsRepository @Inject constructor(
         }
         .distinctUntilChanged()
 
+    private fun Preferences.storedProvider(): Provider? =
+        this[Keys.ModelProvider]?.let { name -> Provider.entries.firstOrNull { it.name == name } }
+
     /**
      * Rebuilds a hand-typed selection from the stored provider, but only while
      * that provider still holds exactly this model id — a stale selection whose
@@ -66,9 +73,7 @@ class SettingsRepository @Inject constructor(
      */
     private fun Preferences.customSelection(id: String): VerbaModel? {
         if (id.isBlank()) return null
-        val provider = this[Keys.ModelProvider]
-            ?.let { name -> Provider.entries.firstOrNull { it.name == name } }
-            ?: return null
+        val provider = storedProvider() ?: return null
         return if (this[Keys.customModel(provider)] == id) {
             VerbaModel.custom(provider, id)
         } else {

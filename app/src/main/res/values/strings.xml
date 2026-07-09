@@ -121,6 +121,8 @@
     <string name="model_gemini_flash_lite">Google\'s newest light Flash — quick and capable, not their flagship depth</string>
     <string name="model_offline">On-device ML Kit — no connection needed once the language pair is downloaded</string>
     <string name="model_free_tier_note">These models are free because the developer pays for them with their own API keys, shared by every person using the app — so replies can slow down when it\'s busy. Add your own key under API keys to translate on your own quota instead of the shared one.</string>
+    <string name="model_badge_builtin">Built-in</string>
+    <string name="model_badge_byok">Your API key</string>
 
     <!-- BYOK models: same honesty, your key pays for them -->
     <string name="model_gpt51">OpenAI\'s flagship — superb idiom; billed to your OpenAI key</string>

@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
@@ -43,6 +45,7 @@ import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
 import com.skeler.verba.R
 import com.skeler.verba.model.LanguagePair
 import com.skeler.verba.model.LanguageSide
@@ -61,6 +64,7 @@ fun HomeScreen(
     input: String,
     pair: LanguagePair,
     model: VerbaModel,
+    modelUsesSharedKey: Boolean,
     translation: TranslationUiState,
     isSaved: Boolean,
     onToggleSave: () -> Unit,
@@ -107,7 +111,11 @@ fun HomeScreen(
             }
         }
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(10.dp))
+
+        ModelIndicator(model = model, sharedKey = modelUsesSharedKey, onClick = onOpenSettings)
+
+        Spacer(Modifier.height(18.dp))
 
         SourceInput(
             input = input,
@@ -140,6 +148,38 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
+        )
+    }
+}
+
+/**
+ * A quiet line naming the model in charge and whose quota it draws on — the
+ * shared free tier, or the key the user typed in themselves. Tapping it opens
+ * the settings screen where that can be changed.
+ */
+@Composable
+private fun ModelIndicator(model: VerbaModel, sharedKey: Boolean, onClick: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 4.dp),
+    ) {
+        Text(
+            text = model.name,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = stringResource(
+                if (sharedKey) R.string.model_badge_builtin else R.string.model_badge_byok,
+            ),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
         )
     }
 }

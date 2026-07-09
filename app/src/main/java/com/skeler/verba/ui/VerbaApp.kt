@@ -110,6 +110,7 @@ fun VerbaApp() {
     val input by homeViewModel.input.collectAsStateWithLifecycle()
     val pair by homeViewModel.pair.collectAsStateWithLifecycle()
     val model by homeViewModel.model.collectAsStateWithLifecycle()
+    val modelUsesSharedKey by homeViewModel.modelUsesSharedKey.collectAsStateWithLifecycle()
     val translation by homeViewModel.translation.collectAsStateWithLifecycle()
     val isSaved by homeViewModel.isCurrentSaved.collectAsStateWithLifecycle()
 
@@ -131,6 +132,7 @@ fun VerbaApp() {
                 input = input,
                 pair = pair,
                 model = model,
+                modelUsesSharedKey = modelUsesSharedKey,
                 translation = translation,
                 isSaved = isSaved,
                 onToggleSave = homeViewModel::toggleSave,
