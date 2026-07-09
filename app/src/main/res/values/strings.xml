@@ -97,6 +97,8 @@
     <string name="keys_field_model">Model ID</string>
     <string name="keys_test">Test</string>
     <string name="keys_remove">Remove key</string>
+    <string name="keys_show_key">Show key</string>
+    <string name="keys_hide_key">Hide key</string>
     <string name="keys_model_hint">e.g. %1$s</string>
     <string name="model_custom_subtitle">Your own model id · %1$s</string>
 

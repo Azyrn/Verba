@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.map
 @Singleton
 class SettingsRepository @Inject constructor(
     private val dataStore: DataStore<Preferences>,
+    private val keyCipher: KeyCipher,
 ) {
 
     private object Keys {
@@ -98,17 +99,27 @@ class SettingsRepository @Inject constructor(
             Provider.entries.mapNotNull { provider ->
                 preferences[Keys.apiKey(provider)]
                     ?.takeIf { it.isNotBlank() }
+                    ?.let(::decryptStoredKey)
                     ?.let { provider to it }
             }.toMap()
         }
         .distinctUntilChanged()
 
     fun apiKey(provider: Provider): Flow<String?> = dataStore.data
-        .map { it[Keys.apiKey(provider)]?.takeIf(String::isNotBlank) }
+        .map { it[Keys.apiKey(provider)]?.takeIf(String::isNotBlank)?.let(::decryptStoredKey) }
         .distinctUntilChanged()
 
+    /**
+     * A key saved before encryption shipped is still plain text on disk —
+     * [KeyCipher.decrypt] can't recognize it as ciphertext and returns null,
+     * so falling back to the raw stored value here is what keeps an
+     * already-configured key from silently vanishing on upgrade. It's
+     * re-encrypted the moment the user next saves that field.
+     */
+    private fun decryptStoredKey(stored: String): String = keyCipher.decrypt(stored) ?: stored
+
     suspend fun setApiKey(provider: Provider, key: String) {
-        dataStore.edit { it[Keys.apiKey(provider)] = key.trim() }
+        dataStore.edit { it[Keys.apiKey(provider)] = keyCipher.encrypt(key.trim()) }
     }
 
     suspend fun clearApiKey(provider: Provider) {

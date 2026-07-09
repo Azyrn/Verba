@@ -66,6 +66,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -906,6 +909,7 @@ private fun ProviderKeyRow(
                 hint = provider.keyHint,
                 imeAction = ImeAction.Next,
                 enabled = !testing,
+                isSecret = true,
                 focusRequester = keyFocus,
                 onValueChange = {
                     keyDraft = it
@@ -994,10 +998,14 @@ private fun CredentialField(
     onValueChange: (String) -> Unit,
     onImeAction: () -> Unit,
     focusRequester: FocusRequester? = null,
+    isSecret: Boolean = false,
 ) {
     val textStyle = MaterialTheme.typography.bodyLarge.copy(
         color = MaterialTheme.colorScheme.onSurface,
     )
+    // Masked by default since this is a credential, not just an id — the
+    // toggle only reveals it for as long as this row stays composed.
+    var revealed by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth()) {
         Text(
             text = label.uppercase(),
@@ -1005,30 +1013,52 @@ private fun CredentialField(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(8.dp))
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            singleLine = true,
-            enabled = enabled,
-            textStyle = textStyle,
-            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-            keyboardOptions = KeyboardOptions(imeAction = imeAction),
-            keyboardActions = KeyboardActions(
-                onNext = { onImeAction() },
-                onDone = { onImeAction() },
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier),
-            decorationBox = { innerTextField ->
-                Box {
-                    if (value.isEmpty()) {
-                        Text(text = hint, style = textStyle, color = MaterialTheme.colorScheme.outline)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                singleLine = true,
+                enabled = enabled,
+                textStyle = textStyle,
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                visualTransformation = if (isSecret && !revealed) {
+                    PasswordVisualTransformation()
+                } else {
+                    VisualTransformation.None
+                },
+                keyboardOptions = KeyboardOptions(
+                    imeAction = imeAction,
+                    keyboardType = if (isSecret) KeyboardType.Password else KeyboardType.Text,
+                ),
+                keyboardActions = KeyboardActions(
+                    onNext = { onImeAction() },
+                    onDone = { onImeAction() },
+                ),
+                modifier = Modifier
+                    .weight(1f)
+                    .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier),
+                decorationBox = { innerTextField ->
+                    Box {
+                        if (value.isEmpty()) {
+                            Text(text = hint, style = textStyle, color = MaterialTheme.colorScheme.outline)
+                        }
+                        innerTextField()
                     }
-                    innerTextField()
+                },
+            )
+            if (isSecret && value.isNotEmpty()) {
+                IconButton(onClick = { revealed = !revealed }, modifier = Modifier.size(28.dp)) {
+                    Icon(
+                        imageVector = if (revealed) VerbaIcons.VisibilityOff else VerbaIcons.Visibility,
+                        contentDescription = stringResource(
+                            if (revealed) R.string.keys_hide_key else R.string.keys_show_key,
+                        ),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp),
+                    )
                 }
-            },
-        )
+            }
+        }
         Spacer(Modifier.height(8.dp))
         Box(
             Modifier
