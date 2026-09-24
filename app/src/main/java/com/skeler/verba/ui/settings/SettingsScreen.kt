@@ -63,6 +63,8 @@ import com.skeler.verba.BuildConfig
 import com.skeler.verba.R
 import com.skeler.verba.data.OfflineLanguage
 import com.skeler.verba.model.ThemeMode
+import com.skeler.verba.model.Voice
+import com.skeler.verba.model.Voices
 import com.skeler.verba.ui.axisEnter
 import com.skeler.verba.ui.axisExit
 import com.skeler.verba.ui.theme.VerbaIcons
@@ -73,6 +75,7 @@ private sealed interface SettingsRoute {
     data object Theme : SettingsRoute
     data object Model : SettingsRoute
     data object Offline : SettingsRoute
+    data object Voice : SettingsRoute
 }
 
 private val SettingsRouteSaver = Saver<SettingsRoute, String>(
@@ -82,6 +85,7 @@ private val SettingsRouteSaver = Saver<SettingsRoute, String>(
             SettingsRoute.Theme -> "theme"
             SettingsRoute.Model -> "model"
             SettingsRoute.Offline -> "offline"
+            SettingsRoute.Voice -> "voice"
         }
     },
     restore = { value ->
@@ -89,14 +93,15 @@ private val SettingsRouteSaver = Saver<SettingsRoute, String>(
             "theme" -> SettingsRoute.Theme
             "model" -> SettingsRoute.Model
             "offline" -> SettingsRoute.Offline
+            "voice" -> SettingsRoute.Voice
             else -> SettingsRoute.Hub
         }
     },
 )
 
 /**
- * Settings reads as a small app of its own: a hub of three category rows —
- * Theme, Model, Offline languages — each opening into its own
+ * Settings reads as a small app of its own: a hub of category rows —
+ * Theme, Model, Voice, Offline languages — each opening into its own
  * screen with the same shared-axis push VerbaApp uses between top-level
  * screens, so drilling in feels continuous with the rest of the app rather
  * than a different navigation idiom bolted on. Only the hub carries About and
@@ -111,6 +116,7 @@ fun SettingsScreen(
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val model by viewModel.model.collectAsStateWithLifecycle()
     val downloads by viewModel.downloads.collectAsStateWithLifecycle()
+    val voice by viewModel.voice.collectAsStateWithLifecycle()
 
     var route by rememberSaveable(stateSaver = SettingsRouteSaver) {
         mutableStateOf<SettingsRoute>(SettingsRoute.Hub)
@@ -144,6 +150,7 @@ fun SettingsScreen(
                     onBack = onBack,
                     themeSummary = themeMode.copy().first,
                     modelSummary = model.name,
+                    voiceSummary = voice.name,
                     offlineSummary = if (offlineDownloaded == 0) {
                         stringResource(R.string.settings_summary_offline_none, offlineTotal)
                     } else {
@@ -151,6 +158,7 @@ fun SettingsScreen(
                     },
                     onOpenTheme = { route = SettingsRoute.Theme },
                     onOpenModel = { route = SettingsRoute.Model },
+                    onOpenVoice = { route = SettingsRoute.Voice },
                     onOpenOffline = { route = SettingsRoute.Offline },
                 )
 
@@ -165,6 +173,13 @@ fun SettingsScreen(
                     models = viewModel.models,
                     selected = model,
                     onSelect = viewModel::setModel,
+                )
+
+                SettingsRoute.Voice -> VoiceSettingsScreen(
+                    onBack = { route = SettingsRoute.Hub },
+                    voices = viewModel.voices,
+                    selected = voice,
+                    onSelect = viewModel::setVoice,
                 )
 
                 SettingsRoute.Offline -> OfflineSettingsScreen(
@@ -211,9 +226,11 @@ private fun SettingsHub(
     onBack: () -> Unit,
     themeSummary: String,
     modelSummary: String,
+    voiceSummary: String,
     offlineSummary: String,
     onOpenTheme: () -> Unit,
     onOpenModel: () -> Unit,
+    onOpenVoice: () -> Unit,
     onOpenOffline: () -> Unit,
 ) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -234,6 +251,13 @@ private fun SettingsHub(
                 title = stringResource(R.string.settings_section_model),
                 value = modelSummary,
                 onClick = onOpenModel,
+            )
+            RowDivider()
+            HubRow(
+                icon = VerbaIcons.VolumeUp,
+                title = stringResource(R.string.settings_section_voice),
+                value = voiceSummary,
+                onClick = onOpenVoice,
             )
             RowDivider()
             HubRow(
@@ -331,6 +355,40 @@ private fun ModelSettingsScreen(
                 ChoiceRow(
                     title = candidate.name,
                     subtitle = stringResource(candidate.description),
+                    selected = selected.id == candidate.id,
+                    onClick = { onSelect(candidate) },
+                )
+            }
+        }
+        Spacer(Modifier.height(32.dp))
+    }
+}
+
+/** Read-aloud voices; every one speaks every language, so it's purely a matter of taste. */
+@Composable
+private fun VoiceSettingsScreen(
+    onBack: () -> Unit,
+    voices: List<Voice>,
+    selected: Voice,
+    onSelect: (Voice) -> Unit,
+) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Spacer(Modifier.height(8.dp))
+        SettingsTopBar(title = stringResource(R.string.settings_section_voice), onBack = onBack)
+        Spacer(Modifier.height(20.dp))
+        SettingsCard {
+            voices.forEachIndexed { index, candidate ->
+                if (index > 0) RowDivider()
+                val kind = stringResource(
+                    if (candidate.female) R.string.voice_female else R.string.voice_male,
+                )
+                ChoiceRow(
+                    title = candidate.name,
+                    subtitle = if (candidate == Voices.default) {
+                        stringResource(R.string.voice_default_suffix, kind)
+                    } else {
+                        kind
+                    },
                     selected = selected.id == candidate.id,
                     onClick = { onSelect(candidate) },
                 )

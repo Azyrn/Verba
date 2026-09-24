@@ -5,6 +5,13 @@
     <string name="input_hint">Type to translate</string>
     <string name="input_clear">Clear text</string>
     <string name="input_paste">Paste from clipboard</string>
+    <string name="voice_record">Speak to type</string>
+    <string name="voice_stop">Stop recording</string>
+    <string name="voice_mic_denied">Verba needs the microphone to hear you.</string>
+    <string name="voice_mic_failed">Couldn’t open the microphone.</string>
+    <string name="voice_heard_nothing">Didn’t catch anything — try again.</string>
+    <string name="voice_transcribe_failed">Couldn’t transcribe that. Check your connection.</string>
+    <string name="voice_speak_failed">Couldn’t read that aloud.</string>
     <string name="settings_open">Open settings</string>
     <string name="pair_chip_description">%1$s to %2$s. Opens the language picker.</string>
     <string name="swap_languages">Swap languages</string>
@@ -13,6 +20,8 @@
     <!-- Result actions -->
     <string name="action_copy">Copy translation</string>
     <string name="action_save">Save translation</string>
+    <string name="action_speak">Read aloud</string>
+    <string name="action_speak_stop">Stop reading</string>
     <string name="result_copied">Copied</string>
     <string name="result_saved">Saved</string>
     <string name="result_removed">Removed</string>
@@ -70,6 +79,10 @@
     <string name="settings_section_theme">Theme</string>
     <string name="settings_section_model">Model</string>
     <string name="settings_section_offline">Offline languages</string>
+    <string name="settings_section_voice">Voice</string>
+    <string name="voice_female">Female</string>
+    <string name="voice_male">Male</string>
+    <string name="voice_default_suffix">%1$s · default</string>
     <string name="settings_section_about">About</string>
     <string name="settings_summary_offline_none">%1$d available</string>
     <string name="settings_summary_offline">%1$d of %2$d downloaded</string>

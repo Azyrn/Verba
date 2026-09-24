@@ -45,7 +45,7 @@ class TranslationRepository @Inject constructor(
                 ),
             )
             if (!response.isSuccessful) {
-                return TranslationOutcome.Failure(errorForStatus(response.code()))
+                return TranslationOutcome.Failure(TranslationError.fromStatus(response.code()))
             }
             val translation = response.body()?.translation?.trim().orEmpty()
             if (translation.isEmpty()) {
@@ -60,14 +60,5 @@ class TranslationRepository @Inject constructor(
         } catch (e: Exception) {
             TranslationOutcome.Failure(TranslationError.UNKNOWN)
         }
-    }
-
-    /** Status codes as worker/src/index.ts sends them. */
-    private fun errorForStatus(code: Int): TranslationError = when (code) {
-        401 -> TranslationError.UNAUTHORIZED
-        413 -> TranslationError.TEXT_TOO_LONG
-        429 -> TranslationError.RATE_LIMITED
-        502, 504 -> TranslationError.MODEL_UNAVAILABLE
-        else -> TranslationError.UNKNOWN
     }
 }

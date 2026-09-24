@@ -9,6 +9,8 @@ import com.skeler.verba.model.Languages
 import com.skeler.verba.model.ThemeMode
 import com.skeler.verba.model.VerbaModel
 import com.skeler.verba.model.VerbaModels
+import com.skeler.verba.model.Voice
+import com.skeler.verba.model.Voices
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
@@ -25,6 +27,7 @@ class SettingsRepository @Inject constructor(
         val Model = stringPreferencesKey("model_id")
         val SourceLanguage = stringPreferencesKey("source_language")
         val TargetLanguage = stringPreferencesKey("target_language")
+        val Voice = stringPreferencesKey("voice_id")
     }
 
     val themeMode: Flow<ThemeMode> = dataStore.data
@@ -34,6 +37,11 @@ class SettingsRepository @Inject constructor(
     /** The selected engine; a selection from before Online/Offline resolves to the default. */
     val model: Flow<VerbaModel> = dataStore.data
         .map { VerbaModels.byId(it[Keys.Model]) }
+        .distinctUntilChanged()
+
+    /** The read-aloud voice. */
+    val voice: Flow<Voice> = dataStore.data
+        .map { Voices.byId(it[Keys.Voice]) }
         .distinctUntilChanged()
 
     /**
@@ -68,6 +76,10 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setModel(model: VerbaModel) {
         dataStore.edit { it[Keys.Model] = model.id }
+    }
+
+    suspend fun setVoice(voice: Voice) {
+        dataStore.edit { it[Keys.Voice] = voice.id }
     }
 
     suspend fun setLanguagePair(pair: LanguagePair) {

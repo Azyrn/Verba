@@ -23,6 +23,7 @@
 # Retrofit does reflection on generic method signatures and interface annotations.
 -keepattributes Signature, Exceptions, RuntimeVisibleAnnotations, RuntimeVisibleParameterAnnotations
 -keep,allowobfuscation interface com.skeler.verba.data.remote.TranslateApi { *; }
+-keep,allowobfuscation interface com.skeler.verba.data.remote.VoiceApi { *; }
 -keep,allowobfuscation,allowshrinking class kotlin.coroutines.Continuation
 
 # Platform-specific / optional deps that R8 warns about but the app never touches.

@@ -8,6 +8,8 @@ import com.skeler.verba.data.SettingsRepository
 import com.skeler.verba.model.ThemeMode
 import com.skeler.verba.model.VerbaModel
 import com.skeler.verba.model.VerbaModels
+import com.skeler.verba.model.Voice
+import com.skeler.verba.model.Voices
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,6 +34,11 @@ class SettingsViewModel @Inject constructor(
 
     val model: StateFlow<VerbaModel> = settings.model
         .stateIn(viewModelScope, SharingStarted.Eagerly, VerbaModels.default)
+
+    val voice: StateFlow<Voice> = settings.voice
+        .stateIn(viewModelScope, SharingStarted.Eagerly, Voices.default)
+
+    val voices: List<Voice> = Voices.all
 
     /** Online and Offline — the only two engines. */
     val models: List<VerbaModel> = VerbaModels.all
@@ -86,5 +93,9 @@ class SettingsViewModel @Inject constructor(
 
     fun setModel(model: VerbaModel) {
         viewModelScope.launch { settings.setModel(model) }
+    }
+
+    fun setVoice(voice: Voice) {
+        viewModelScope.launch { settings.setVoice(voice) }
     }
 }

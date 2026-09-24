@@ -1,12 +1,18 @@
 package com.skeler.verba.ui.home
 
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.skeler.verba.R
 import com.skeler.verba.data.SavedTranslation
 import com.skeler.verba.data.SavedTranslationsRepository
 import com.skeler.verba.data.SettingsRepository
 import com.skeler.verba.data.TranslationOutcome
+import com.skeler.verba.data.SpeechPlayer
 import com.skeler.verba.data.TranslationRepository
+import com.skeler.verba.data.VoiceOutcome
+import com.skeler.verba.data.VoiceRecorder
+import com.skeler.verba.data.VoiceRepository
 import com.skeler.verba.model.Language
 import com.skeler.verba.model.LanguagePair
 import com.skeler.verba.model.LanguageSide
@@ -16,6 +22,7 @@ import com.skeler.verba.model.VerbaModels
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -23,6 +30,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
@@ -35,12 +43,34 @@ sealed interface TranslationUiState {
     data class Error(val error: TranslationError, val previous: String?) : TranslationUiState
 }
 
+/** The mic button: idle, listening, or waiting on the transcript. */
+enum class VoiceInputState { Idle, Recording, Transcribing }
+
+/** Read-aloud for [text]: fetching its audio, or playing it. */
+data class SpeechState(val text: String, val playing: Boolean)
+
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val repository: TranslationRepository,
     private val settings: SettingsRepository,
     private val savedTranslations: SavedTranslationsRepository,
+    private val voice: VoiceRepository,
+    private val recorder: VoiceRecorder,
+    private val player: SpeechPlayer,
 ) : ViewModel() {
+
+    private val _voiceInput = MutableStateFlow(VoiceInputState.Idle)
+    val voiceInput: StateFlow<VoiceInputState> = _voiceInput.asStateFlow()
+
+    /** Null when nothing is being read aloud. */
+    private val _speech = MutableStateFlow<SpeechState?>(null)
+    val speech: StateFlow<SpeechState?> = _speech.asStateFlow()
+
+    /** A short line under the input when a voice action fails; clears itself. */
+    private val _voiceNotice = MutableStateFlow<Int?>(null)
+    val voiceNotice: StateFlow<Int?> = _voiceNotice.asStateFlow()
+    private var noticeJob: Job? = null
+    private var speechJob: Job? = null
 
     private val _input = MutableStateFlow("")
     val input: StateFlow<String> = _input.asStateFlow()
@@ -156,7 +186,96 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch { settings.setLanguagePair(updated) }
     }
 
+    /** Call only once RECORD_AUDIO is granted. */
+    fun startRecording() {
+        if (_voiceInput.value != VoiceInputState.Idle) return
+        stopSpeaking()
+        if (recorder.start(onLimit = ::stopRecording)) {
+            _voiceInput.value = VoiceInputState.Recording
+        } else {
+            notify(R.string.voice_mic_failed)
+        }
+    }
+
+    /** Stops listening and puts the transcript into the input, after any text already there. */
+    fun stopRecording() {
+        if (_voiceInput.value != VoiceInputState.Recording) return
+        val audio = recorder.stop()
+        if (audio == null) {
+            _voiceInput.value = VoiceInputState.Idle
+            notify(R.string.voice_heard_nothing)
+            return
+        }
+        _voiceInput.value = VoiceInputState.Transcribing
+        viewModelScope.launch {
+            when (val outcome = voice.transcribe(audio, pair.value.source)) {
+                is VoiceOutcome.Success -> {
+                    val current = _input.value.trimEnd()
+                    _input.value = if (current.isEmpty()) outcome.value
+                    else "$current ${outcome.value}"
+                }
+                is VoiceOutcome.Failure -> notify(
+                    if (outcome.error == TranslationError.EMPTY_RESPONSE) R.string.voice_heard_nothing
+                    else R.string.voice_transcribe_failed,
+                )
+            }
+            _voiceInput.value = VoiceInputState.Idle
+        }
+    }
+
+    fun onMicPermissionDenied() = notify(R.string.voice_mic_denied)
+
+    /** Reads [text] aloud, or stops if it's the text already being read. */
+    fun toggleSpeak(text: String) {
+        if (_speech.value?.text == text) {
+            stopSpeaking()
+            return
+        }
+        stopSpeaking()
+        _speech.value = SpeechState(text, playing = false)
+        speechJob = viewModelScope.launch {
+            val selected = settings.voice.first()
+            when (val outcome = voice.speak(text, selected, pair.value.target)) {
+                is VoiceOutcome.Success -> {
+                    val started = player.play(outcome.value) {
+                        if (_speech.value?.text == text) _speech.value = null
+                    }
+                    if (started) _speech.value = SpeechState(text, playing = true)
+                    else {
+                        _speech.value = null
+                        notify(R.string.voice_speak_failed)
+                    }
+                }
+                is VoiceOutcome.Failure -> {
+                    _speech.value = null
+                    notify(R.string.voice_speak_failed)
+                }
+            }
+        }
+    }
+
+    private fun stopSpeaking() {
+        speechJob?.cancel()
+        player.stop()
+        _speech.value = null
+    }
+
+    private fun notify(@StringRes message: Int) {
+        noticeJob?.cancel()
+        _voiceNotice.value = message
+        noticeJob = viewModelScope.launch {
+            delay(NOTICE_MILLIS)
+            _voiceNotice.value = null
+        }
+    }
+
+    override fun onCleared() {
+        recorder.release()
+        player.stop()
+    }
+
     private companion object {
         const val DEBOUNCE_MILLIS = 400L
+        const val NOTICE_MILLIS = 3_000L
     }
 }

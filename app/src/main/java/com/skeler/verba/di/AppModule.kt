@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStoreFile
 import com.skeler.verba.BuildConfig
 import com.skeler.verba.data.remote.TranslateApi
+import com.skeler.verba.data.remote.VoiceApi
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -59,11 +60,20 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideTranslateApi(client: OkHttpClient, json: Json): TranslateApi =
+    fun provideRetrofit(client: OkHttpClient, json: Json): Retrofit =
         Retrofit.Builder()
             .baseUrl(BuildConfig.VERBA_API_URL.ifBlank { UNCONFIGURED_URL }.trimEnd('/') + "/")
             .client(client)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
-            .create(TranslateApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideTranslateApi(retrofit: Retrofit): TranslateApi =
+        retrofit.create(TranslateApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideVoiceApi(retrofit: Retrofit): VoiceApi =
+        retrofit.create(VoiceApi::class.java)
 }

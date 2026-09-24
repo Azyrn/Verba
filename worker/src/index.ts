@@ -1,12 +1,15 @@
 /**
- * Verba's translation endpoint. The DeepSeek key lives only here, as a Worker
- * secret; the app sends text and language names and gets a translation back.
- * The Worker builds the whole upstream request itself — model, prompt,
- * sampling — so it is a translator, not an open proxy for the key.
+ * Verba's backend. The DeepSeek and xAI keys live only here, as Worker
+ * secrets. Three routes, each building its whole upstream request itself so
+ * none is an open proxy for a key:
+ *   POST /     — translate text (DeepSeek)
+ *   POST /stt  — transcribe a voice recording (xAI speech-to-text)
+ *   POST /tts  — read text aloud (xAI text-to-speech), returns audio/mpeg
  */
 
 interface Env {
   DEEPSEEK_API_KEY: string;
+  XAI_API_KEY: string;
   APP_TOKEN: string;
   PER_IP: RateLimit;
 }
@@ -24,6 +27,15 @@ const MODEL = "deepseek-flash";
 const MAX_CHARS = 10_000;
 const LANGUAGE_NAME = /^[\p{L} (),'-]{1,40}$/u;
 
+const XAI_STT_URL = "https://api.x.ai/v1/stt";
+const XAI_TTS_URL = "https://api.x.ai/v1/tts";
+const STT_MODEL = "grok-voice-transcribe-2.0";
+/** ~2 minutes of the app's 48 kbps AAC, with plenty of headroom. */
+const MAX_AUDIO_BYTES = 4 * 1024 * 1024;
+const MAX_SPEECH_CHARS = 5_000;
+const LANGUAGE_CODE = /^[a-z]{2,3}(-[A-Za-z]{2,4})?$/;
+const VOICE_ID = /^[a-z]{2,20}$/;
+
 export default {
   async fetch(request, env): Promise<Response> {
     if (request.method !== "POST") return error(405, "method_not_allowed");
@@ -33,48 +45,130 @@ export default {
     const { success } = await env.PER_IP.limit({ key: ip });
     if (!success) return error(429, "rate_limited");
 
-    const body = parse(await request.json().catch(() => null));
-    if (typeof body === "string") return error(body === "too_long" ? 413 : 400, body);
-
-    let upstream: Response;
-    try {
-      upstream = await fetch(DEEPSEEK_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${env.DEEPSEEK_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: MODEL,
-          messages: [
-            { role: "system", content: systemPrompt(body) },
-            { role: "user", content: body.text },
-          ],
-          thinking: { type: "disabled" },
-          temperature: 1.0,
-          // Room for the translation to run longer than the source (e.g. into
-          // a wordier script), without leaving the model an open-ended budget.
-          max_tokens: Math.min(8192, body.text.length * 2 + 256),
-          stream: false,
-        }),
-        signal: AbortSignal.timeout(30_000),
-      });
-    } catch {
-      return error(504, "upstream_unreachable");
-    }
-
-    if (!upstream.ok) {
-      console.error("deepseek", upstream.status, (await upstream.text()).slice(0, 300));
-      return error(upstream.status === 402 || upstream.status === 429 ? 429 : 502, "upstream_error");
-    }
-    const completion = await upstream.json<{
-      choices?: { message?: { content?: string } }[];
-    }>();
-    const translation = completion.choices?.[0]?.message?.content?.trim();
-    if (!translation) return error(502, "empty_response");
-    return Response.json({ translation });
+    const path = new URL(request.url).pathname.replace(/\/+$/, "");
+    if (path === "/stt") return transcribe(request, env);
+    if (path === "/tts") return speak(request, env);
+    if (path !== "") return error(404, "not_found");
+    return translate(request, env);
   },
 } satisfies ExportedHandler<Env>;
+
+async function translate(request: Request, env: Env): Promise<Response> {
+  const body = parse(await request.json().catch(() => null));
+  if (typeof body === "string") return error(body === "too_long" ? 413 : 400, body);
+
+  let upstream: Response;
+  try {
+    upstream = await fetch(DEEPSEEK_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${env.DEEPSEEK_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [
+          { role: "system", content: systemPrompt(body) },
+          { role: "user", content: body.text },
+        ],
+        thinking: { type: "disabled" },
+        temperature: 1.0,
+        // Room for the translation to run longer than the source (e.g. into
+        // a wordier script), without leaving the model an open-ended budget.
+        max_tokens: Math.min(8192, body.text.length * 2 + 256),
+        stream: false,
+      }),
+      signal: AbortSignal.timeout(30_000),
+    });
+  } catch {
+    return error(504, "upstream_unreachable");
+  }
+
+  if (!upstream.ok) {
+    console.error("deepseek", upstream.status, (await upstream.text()).slice(0, 300));
+    return error(upstream.status === 402 || upstream.status === 429 ? 429 : 502, "upstream_error");
+  }
+  const completion = await upstream.json<{
+    choices?: { message?: { content?: string } }[];
+  }>();
+  const translation = completion.choices?.[0]?.message?.content?.trim();
+  if (!translation) return error(502, "empty_response");
+  return Response.json({ translation });
+}
+
+/**
+ * Body: the raw recording (any container xAI detects — the app sends M4A).
+ * Query: optional `language`, a hint for the spoken language; xAI detects it
+ * on its own when absent and ignores a hint it can't use.
+ */
+async function transcribe(request: Request, env: Env): Promise<Response> {
+  const language = new URL(request.url).searchParams.get("language");
+  if (language != null && !LANGUAGE_CODE.test(language)) return error(400, "bad_request");
+  const declared = Number(request.headers.get("Content-Length") ?? 0);
+  if (declared > MAX_AUDIO_BYTES) return error(413, "too_long");
+  const audio = await request.arrayBuffer();
+  if (audio.byteLength === 0) return error(400, "bad_request");
+  if (audio.byteLength > MAX_AUDIO_BYTES) return error(413, "too_long");
+
+  // xAI wants every other field before the file.
+  const form = new FormData();
+  form.append("model", STT_MODEL);
+  if (language) form.append("language", language);
+  form.append("file", new Blob([audio]), "speech.m4a");
+
+  const upstream = await xai(XAI_STT_URL, env, { body: form });
+  if (!upstream.ok) return upstream;
+  const result = await upstream.json<{ text?: string }>();
+  return Response.json({ text: result.text?.trim() ?? "" });
+}
+
+/** Body: `{ text, voice, language }`; answers with the MP3 itself. */
+async function speak(request: Request, env: Env): Promise<Response> {
+  const raw = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const text = raw?.text;
+  const voice = raw?.voice;
+  const language = raw?.language;
+  if (typeof text !== "string" || !text.trim()) return error(400, "bad_request");
+  if (text.length > MAX_SPEECH_CHARS) return error(413, "too_long");
+  if (typeof voice !== "string" || !VOICE_ID.test(voice)) return error(400, "bad_request");
+  if (language != null && (typeof language !== "string" || !LANGUAGE_CODE.test(language))) {
+    return error(400, "bad_request");
+  }
+
+  const upstream = await xai(XAI_TTS_URL, env, {
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      text,
+      voice_id: voice,
+      language: language ?? "auto",
+      output_format: { codec: "mp3", sample_rate: 24000, bit_rate: 64000 },
+    }),
+  });
+  if (!upstream.ok) return upstream;
+  return new Response(upstream.body, {
+    headers: { "Content-Type": "audio/mpeg" },
+  });
+}
+
+/** Calls xAI; a failure comes back as the (non-ok) error Response the app should see. */
+async function xai(url: string, env: Env, init: RequestInit): Promise<Response> {
+  let upstream: Response;
+  try {
+    upstream = await fetch(url, {
+      method: "POST",
+      ...init,
+      headers: { ...(init.headers as Record<string, string>), Authorization: `Bearer ${env.XAI_API_KEY}` },
+      signal: AbortSignal.timeout(45_000),
+    });
+  } catch {
+    return error(504, "upstream_unreachable");
+  }
+  if (!upstream.ok) {
+    console.error("xai", url, upstream.status, (await upstream.text()).slice(0, 300));
+    return error(upstream.status === 402 || upstream.status === 429 ? 429 : 502, "upstream_error");
+  }
+  return upstream;
+}
 
 /**
  * Short on purpose: every token here is paid and waited on per request. It

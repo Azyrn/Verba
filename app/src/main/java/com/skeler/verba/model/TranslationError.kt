@@ -28,4 +28,16 @@ enum class TranslationError {
 
     /** Anything else. */
     UNKNOWN,
+    ;
+
+    companion object {
+        /** Status codes as worker/src/index.ts sends them. */
+        fun fromStatus(code: Int): TranslationError = when (code) {
+            401 -> UNAUTHORIZED
+            413 -> TEXT_TOO_LONG
+            429 -> RATE_LIMITED
+            502, 504 -> MODEL_UNAVAILABLE
+            else -> UNKNOWN
+        }
+    }
 }
