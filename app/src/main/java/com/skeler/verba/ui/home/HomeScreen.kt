@@ -45,6 +45,7 @@ import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,7 +60,9 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import com.skeler.verba.R
 import com.skeler.verba.model.LanguagePair
@@ -245,9 +248,19 @@ private fun SourceInput(
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        // Text that arrives from outside (dictation, paste, clear) puts the
+        // caret at its end, and the field scrolls to keep the caret in view —
+        // so live dictation always shows its newest words.
+        var field by remember { mutableStateOf(TextFieldValue(input, TextRange(input.length))) }
+        LaunchedEffect(input) {
+            if (field.text != input) field = TextFieldValue(input, TextRange(input.length))
+        }
         BasicTextField(
-            value = input,
-            onValueChange = onInputChange,
+            value = field,
+            onValueChange = {
+                field = it
+                if (it.text != input) onInputChange(it.text)
+            },
             textStyle = inputStyle,
             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
             maxLines = 4,

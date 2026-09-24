@@ -148,6 +148,17 @@ class HomeViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TranslationUiState.Empty)
 
+    init {
+        // Read-aloud belongs to the translation on screen: once that's cleared,
+        // edited or replaced, its stop button is gone, so the voice stops too.
+        viewModelScope.launch {
+            translation.collect { state ->
+                val reading = _speech.value ?: return@collect
+                if ((state as? TranslationUiState.Success)?.text != reading.text) stopSpeaking()
+            }
+        }
+    }
+
     /** Whether the translation on screen is already in the saved list. */
     val isCurrentSaved: StateFlow<Boolean> = combine(
         translation,
