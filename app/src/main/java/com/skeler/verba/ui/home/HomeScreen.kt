@@ -134,7 +134,14 @@ fun HomeScreen(
 
         Spacer(Modifier.height(10.dp))
 
-        ModelIndicator(model = model, onClick = onOpenSettings)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) {
+                ModelIndicator(model = model, onClick = onOpenSettings)
+            }
+            // Up here rather than beside the input, so pasted text gets the
+            // input's full width to read in.
+            PasteButton(onPaste = onInputChange)
+        }
 
         Spacer(Modifier.height(18.dp))
 
@@ -259,15 +266,15 @@ private fun SourceInput(
             },
         )
 
-        Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
+        // Spinner while translating, clear once there's text; otherwise the
+        // slot takes no room at all.
+        if (isTranslating || input.isNotEmpty()) Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
             when {
                 isTranslating -> LoadingIndicator(
                     modifier = Modifier.size(24.dp),
                     color = MaterialTheme.colorScheme.primary,
                 )
 
-                // The slot holds one quiet affordance: clear when there is
-                // text, paste when there isn't.
                 input.isNotEmpty() -> androidx.compose.animation.AnimatedVisibility(
                     visible = true,
                     enter = fadeIn() + scaleIn(initialScale = 0.6f),
@@ -282,8 +289,6 @@ private fun SourceInput(
                         )
                     }
                 }
-
-                else -> PasteButton(onPaste = onInputChange)
             }
         }
 
