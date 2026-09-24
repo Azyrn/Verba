@@ -24,8 +24,8 @@ android {
         applicationId = "com.skeler.verba"
         minSdk = 24
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.3.0"
+        versionCode = 5
+        versionName = "1.4.0"
 
         // The translation Worker (worker/) holds the DeepSeek key; the app only
         // knows where it is and the token that lets it in.
