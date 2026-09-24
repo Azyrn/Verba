@@ -47,6 +47,7 @@ import com.skeler.verba.R
 import com.skeler.verba.model.LanguagePair
 import com.skeler.verba.model.TranslationError
 import com.skeler.verba.model.VerbaModel
+import com.skeler.verba.ui.bidiText
 import com.skeler.verba.ui.theme.VerbaIcons
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -136,7 +137,7 @@ private fun Translation(
         Spacer(Modifier.height(12.dp))
         SelectionContainer {
             Text(
-                text = text,
+                text = bidiText(text),
                 style = resultStyle(text.length),
                 color = MaterialTheme.colorScheme.onBackground,
             )

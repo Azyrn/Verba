@@ -44,6 +44,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.skeler.verba.R
 import com.skeler.verba.data.SavedTranslation
 import com.skeler.verba.model.Languages
+import com.skeler.verba.ui.bidiText
+import com.skeler.verba.ui.textDirectionOf
 import com.skeler.verba.ui.theme.VerbaIcons
 import kotlinx.coroutines.launch
 
@@ -137,7 +139,9 @@ private fun SavedCard(
         Spacer(Modifier.height(10.dp))
         Text(
             text = entry.sourceText,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyMedium.copy(
+                textDirection = textDirectionOf(entry.sourceText),
+            ),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 3,
             overflow = TextOverflow.Ellipsis,
@@ -156,7 +160,7 @@ private fun SavedCard(
 
         SelectionContainer {
             Text(
-                text = entry.translatedText,
+                text = bidiText(entry.translatedText),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onBackground,
             )

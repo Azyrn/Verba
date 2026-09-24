@@ -65,6 +65,7 @@ import com.skeler.verba.R
 import com.skeler.verba.model.LanguagePair
 import com.skeler.verba.model.LanguageSide
 import com.skeler.verba.model.VerbaModel
+import com.skeler.verba.ui.textDirectionOf
 import com.skeler.verba.ui.theme.VerbaIcons
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -238,6 +239,7 @@ private fun SourceInput(
 ) {
     val inputStyle: TextStyle = MaterialTheme.typography.bodyLarge.copy(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textDirection = textDirectionOf(input),
     )
     Row(
         verticalAlignment = Alignment.Top,
