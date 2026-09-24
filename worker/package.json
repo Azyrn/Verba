@@ -1,0 +1,10 @@
+{
+  "name": "verba-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npx wrangler@4.137.0 dev",
+    "deploy": "npx wrangler@4.137.0 deploy",
+    "types": "npx wrangler@4.137.0 types"
+  }
+}
