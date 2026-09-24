@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.skeler.verba.data.MlKitModelManager
 import com.skeler.verba.data.OfflineLanguage
 import com.skeler.verba.data.SettingsRepository
+import com.skeler.verba.model.DictationMode
 import com.skeler.verba.model.ThemeMode
 import com.skeler.verba.model.VerbaModel
 import com.skeler.verba.model.VerbaModels
@@ -39,6 +40,9 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, Voices.default)
 
     val voices: List<Voice> = Voices.all
+
+    val dictationMode: StateFlow<DictationMode> = settings.dictationMode
+        .stateIn(viewModelScope, SharingStarted.Eagerly, DictationMode.default)
 
     /** Online and Offline — the only two engines. */
     val models: List<VerbaModel> = VerbaModels.all
@@ -97,5 +101,9 @@ class SettingsViewModel @Inject constructor(
 
     fun setVoice(voice: Voice) {
         viewModelScope.launch { settings.setVoice(voice) }
+    }
+
+    fun setDictationMode(mode: DictationMode) {
+        viewModelScope.launch { settings.setDictationMode(mode) }
     }
 }

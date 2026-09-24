@@ -80,6 +80,11 @@
     <string name="settings_section_model">Model</string>
     <string name="settings_section_offline">Offline languages</string>
     <string name="settings_section_voice">Voice</string>
+    <string name="settings_section_dictation">Dictation</string>
+    <string name="dictation_batch">Batch</string>
+    <string name="dictation_batch_subtitle">Transcribes the whole recording after you stop. Default.</string>
+    <string name="dictation_live">Live</string>
+    <string name="dictation_live_subtitle">Words appear while you speak; translates when you stop.</string>
     <string name="voice_female">Female</string>
     <string name="voice_male">Male</string>
     <string name="voice_default_suffix">%1$s · default</string>

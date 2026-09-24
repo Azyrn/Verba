@@ -1,11 +1,6 @@
 package com.skeler.verba.data
 
-import android.annotation.SuppressLint
 import android.content.Context
-import android.media.AudioFormat
-import android.media.AudioManager
-import android.media.AudioRecord
-import android.media.MediaRecorder
 import android.os.Handler
 import android.os.Looper
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -19,11 +14,8 @@ import kotlin.math.abs
 import kotlin.math.min
 
 /**
- * Records the microphone as 16 kHz mono PCM — the transcription model's
- * native rate — and hands it over as a WAV, turned up so its loudest moment
- * sits near full scale. Speech from across a room or out of a laptop speaker
- * arrives quiet, and phone voice processing tends to treat it as background
- * noise, so the raw mic is used where the phone offers one. The caller must
+ * Batch dictation: records the mic ([openMicrophone]) and hands it over as a
+ * WAV, turned up so its loudest moment sits near full scale. The caller must
  * already hold RECORD_AUDIO.
  */
 @Singleton
@@ -38,36 +30,15 @@ class VoiceRecorder @Inject constructor(
     private var pcm = ByteArrayOutputStream()
 
     /** Starts recording; false if the mic couldn't be opened. [onLimit] fires at [MAX_MILLIS]. */
-    @SuppressLint("MissingPermission")
     fun start(onLimit: () -> Unit): Boolean {
         release()
-        val minBuffer = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL, ENCODING)
-        if (minBuffer <= 0) return false
-        val record = try {
-            AudioRecord(source(), SAMPLE_RATE, CHANNEL, ENCODING, maxOf(minBuffer, SAMPLE_RATE))
-        } catch (e: Exception) {
-            return false
-        }
-        if (record.state != AudioRecord.STATE_INITIALIZED) {
-            record.release()
-            return false
-        }
-        try {
-            record.startRecording()
-        } catch (e: Exception) {
-            record.release()
-            return false
-        }
-        if (record.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
-            record.release()
-            return false
-        }
+        val record = openMicrophone(context) ?: return false
 
         val out = ByteArrayOutputStream(MAX_BYTES / 4)
         pcm = out
         recording = true
         thread = Thread({
-            val chunk = ByteArray(minBuffer)
+            val chunk = ByteArray(CHUNK_BYTES)
             try {
                 while (recording) {
                     val read = record.read(chunk, 0, chunk.size)
@@ -110,14 +81,6 @@ class VoiceRecorder @Inject constructor(
         thread = null
     }
 
-    /** The unprocessed mic where the phone has one; otherwise the source tuned for recognition. */
-    private fun source(): Int {
-        val audio = context.getSystemService(AudioManager::class.java)
-        val raw = audio?.getProperty(AudioManager.PROPERTY_SUPPORT_AUDIO_SOURCE_UNPROCESSED)
-        return if (raw == "true") MediaRecorder.AudioSource.UNPROCESSED
-        else MediaRecorder.AudioSource.VOICE_RECOGNITION
-    }
-
     /**
      * Removes any DC offset and scales the loudest sample to [TARGET_PEAK],
      * up to [MAX_GAIN]. False if the recording is effectively silence.
@@ -148,12 +111,11 @@ class VoiceRecorder @Inject constructor(
 
     companion object {
         const val MAX_MILLIS = 120_000
-        private const val SAMPLE_RATE = 16_000
-        private const val CHANNEL = AudioFormat.CHANNEL_IN_MONO
-        private const val ENCODING = AudioFormat.ENCODING_PCM_16BIT
+        private const val SAMPLE_RATE = MIC_SAMPLE_RATE
         private const val MAX_BYTES = SAMPLE_RATE * 2 * (MAX_MILLIS / 1000)
-        private const val TARGET_PEAK = 29_000f
-        private const val MAX_GAIN = 20f
+        private const val CHUNK_BYTES = SAMPLE_RATE / 10 * 2 // 100 ms
+        private const val TARGET_PEAK = MIC_TARGET_PEAK
+        private const val MAX_GAIN = MIC_MAX_GAIN
         /** About -60 dBFS: below this there's nothing to transcribe. */
         private const val SILENCE_PEAK = 33L
     }

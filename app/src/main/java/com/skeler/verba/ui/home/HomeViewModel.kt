@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.skeler.verba.R
+import com.skeler.verba.data.LiveTranscriber
 import com.skeler.verba.data.SavedTranslation
 import com.skeler.verba.data.SavedTranslationsRepository
 import com.skeler.verba.data.SettingsRepository
@@ -13,6 +14,7 @@ import com.skeler.verba.data.TranslationRepository
 import com.skeler.verba.data.VoiceOutcome
 import com.skeler.verba.data.VoiceRecorder
 import com.skeler.verba.data.VoiceRepository
+import com.skeler.verba.model.DictationMode
 import com.skeler.verba.model.Language
 import com.skeler.verba.model.LanguagePair
 import com.skeler.verba.model.LanguageSide
@@ -56,8 +58,18 @@ class HomeViewModel @Inject constructor(
     private val savedTranslations: SavedTranslationsRepository,
     private val voice: VoiceRepository,
     private val recorder: VoiceRecorder,
+    private val live: LiveTranscriber,
     private val player: SpeechPlayer,
 ) : ViewModel() {
+
+    private val dictationMode: StateFlow<DictationMode> = settings.dictationMode
+        .stateIn(viewModelScope, SharingStarted.Eagerly, DictationMode.default)
+
+    /** True while live dictation is writing into the input; translation waits for the last word. */
+    private val liveDictating = MutableStateFlow(false)
+
+    /** The input as it was when live dictation began; live words go after it. */
+    private var liveBase = ""
 
     private val _voiceInput = MutableStateFlow(VoiceInputState.Idle)
     val voiceInput: StateFlow<VoiceInputState> = _voiceInput.asStateFlow()
@@ -91,6 +103,7 @@ class HomeViewModel @Inject constructor(
         val pair: LanguagePair,
         val model: VerbaModel,
         val attempt: Int,
+        val paused: Boolean,
     )
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -99,11 +112,15 @@ class HomeViewModel @Inject constructor(
         settings.languagePair,
         settings.model,
         retryTicker,
-    ) { text, pair, model, attempt ->
-        TranslationRequest(text.trim(), pair, model, attempt)
+        liveDictating,
+    ) { text, pair, model, attempt, paused ->
+        TranslationRequest(text.trim(), pair, model, attempt, paused)
     }
         .distinctUntilChanged()
         .transformLatest { request ->
+            // Mid-dictation text changes every half second; the screen keeps
+            // what it has until the transcript is complete.
+            if (request.paused) return@transformLatest
             if (request.text.isEmpty()) {
                 lastTranslation = null
                 emit(TranslationUiState.Empty)
@@ -190,16 +207,40 @@ class HomeViewModel @Inject constructor(
     fun startRecording() {
         if (_voiceInput.value != VoiceInputState.Idle) return
         stopSpeaking()
-        if (recorder.start(onLimit = ::stopRecording)) {
+        val started = when (dictationMode.value) {
+            DictationMode.BATCH -> recorder.start(onLimit = ::stopRecording)
+            DictationMode.LIVE -> startLive()
+        }
+        if (started) {
             _voiceInput.value = VoiceInputState.Recording
         } else {
+            liveDictating.value = false
             notify(R.string.voice_mic_failed)
         }
+    }
+
+    /** Words go into the input as they're recognised, after any text already there. */
+    private fun startLive(): Boolean {
+        val before = _input.value.trimEnd()
+        liveBase = before
+        liveDictating.value = true
+        return live.start(
+            language = pair.value.source,
+            onText = { text -> _input.value = joinInput(before, text) },
+            onLimit = ::stopRecording,
+            onError = {
+                live.cancel()
+                liveDictating.value = false
+                _voiceInput.value = VoiceInputState.Idle
+                notify(R.string.voice_transcribe_failed)
+            },
+        )
     }
 
     /** Stops listening and puts the transcript into the input, after any text already there. */
     fun stopRecording() {
         if (_voiceInput.value != VoiceInputState.Recording) return
+        if (liveDictating.value) return stopLive()
         val audio = recorder.stop()
         if (audio == null) {
             _voiceInput.value = VoiceInputState.Idle
@@ -209,11 +250,7 @@ class HomeViewModel @Inject constructor(
         _voiceInput.value = VoiceInputState.Transcribing
         viewModelScope.launch {
             when (val outcome = voice.transcribe(audio, pair.value.source)) {
-                is VoiceOutcome.Success -> {
-                    val current = _input.value.trimEnd()
-                    _input.value = if (current.isEmpty()) outcome.value
-                    else "$current ${outcome.value}"
-                }
+                is VoiceOutcome.Success -> _input.value = joinInput(_input.value, outcome.value)
                 is VoiceOutcome.Failure -> notify(
                     if (outcome.error == TranslationError.EMPTY_RESPONSE) R.string.voice_heard_nothing
                     else R.string.voice_transcribe_failed,
@@ -221,6 +258,31 @@ class HomeViewModel @Inject constructor(
             }
             _voiceInput.value = VoiceInputState.Idle
         }
+    }
+
+    private fun stopLive() {
+        _voiceInput.value = VoiceInputState.Transcribing
+        // What's in the input now is the text from before plus the live words.
+        val shown = _input.value
+        viewModelScope.launch {
+            when (val outcome = live.finish()) {
+                is VoiceOutcome.Success -> _input.value = joinInput(liveBase, outcome.value)
+                is VoiceOutcome.Failure -> {
+                    _input.value = shown
+                    notify(
+                        if (outcome.error == TranslationError.EMPTY_RESPONSE) R.string.voice_heard_nothing
+                        else R.string.voice_transcribe_failed,
+                    )
+                }
+            }
+            liveDictating.value = false
+            _voiceInput.value = VoiceInputState.Idle
+        }
+    }
+
+    private fun joinInput(before: String, words: String): String {
+        val current = before.trimEnd()
+        return if (current.isEmpty()) words else "$current $words"
     }
 
     fun onMicPermissionDenied() = notify(R.string.voice_mic_denied)
@@ -260,6 +322,7 @@ class HomeViewModel @Inject constructor(
 
     override fun onCleared() {
         recorder.release()
+        live.cancel()
         player.stop()
     }
 

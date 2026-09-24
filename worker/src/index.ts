@@ -1,10 +1,11 @@
 /**
  * Verba's backend. The DeepSeek and xAI keys live only here, as Worker
- * secrets. Three routes, each building its whole upstream request itself so
+ * secrets. Four routes, each building its whole upstream request itself so
  * none is an open proxy for a key:
  *   POST /     — translate text (DeepSeek)
  *   POST /stt  — transcribe a voice recording (xAI speech-to-text)
- *   POST /tts  — read text aloud (xAI text-to-speech), returns audio/mpeg
+ *   GET  /stt/live — WebSocket: transcribe while the user speaks (xAI streaming STT)
+ *   POST /tts  — read text aloud (xAI text-to-speech), returns MP3 or raw PCM
  */
 
 interface Env {
@@ -38,14 +39,17 @@ const VOICE_ID = /^[a-z]{2,20}$/;
 
 export default {
   async fetch(request, env): Promise<Response> {
-    if (request.method !== "POST") return error(405, "method_not_allowed");
+    const path = new URL(request.url).pathname.replace(/\/+$/, "");
+    // Live dictation is the one route opened as a WebSocket (a GET upgrade).
+    const live = path === "/stt/live";
+    if (request.method !== (live ? "GET" : "POST")) return error(405, "method_not_allowed");
     if (!authorized(request, env)) return error(401, "unauthorized");
 
     const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
     const { success } = await env.PER_IP.limit({ key: ip });
     if (!success) return error(429, "rate_limited");
 
-    const path = new URL(request.url).pathname.replace(/\/+$/, "");
+    if (live) return transcribeLive(request, env);
     if (path === "/stt") return transcribe(request, env);
     if (path === "/tts") return speak(request, env);
     if (path !== "") return error(404, "not_found");
@@ -125,6 +129,96 @@ async function transcribe(request: Request, env: Env): Promise<Response> {
   if (!upstream.ok) return upstream;
   const result = await upstream.json<{ text?: string }>();
   return Response.json({ text: result.text?.trim() ?? "" });
+}
+
+/**
+ * Live dictation: a WebSocket relayed to xAI's streaming STT. The app sends
+ * 16 kHz 16-bit mono PCM as binary frames and `{"type":"audio.done"}` when it
+ * stops; it gets xAI's `transcript.partial` / `transcript.done` / `error`
+ * events back as they are. The Worker fixes the model and audio format and
+ * ends the stream after as much audio as a batch upload may carry.
+ */
+async function transcribeLive(request: Request, env: Env): Promise<Response> {
+  if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
+    return error(426, "upgrade_required");
+  }
+  const language = new URL(request.url).searchParams.get("language");
+  if (language != null && !LANGUAGE_CODE.test(language)) return error(400, "bad_request");
+
+  const params = new URLSearchParams({
+    model: STT_MODEL,
+    encoding: "pcm",
+    sample_rate: "16000",
+    interim_results: "true",
+  });
+  if (language) params.set("language", language);
+
+  let upstream: Response;
+  try {
+    upstream = await fetch(`${XAI_STT_URL}?${params}`, {
+      headers: { Upgrade: "websocket", Authorization: `Bearer ${env.XAI_API_KEY}` },
+    });
+  } catch {
+    return error(504, "upstream_unreachable");
+  }
+  const xaiSocket = upstream.webSocket;
+  if (!xaiSocket) {
+    console.error("xai live", upstream.status, (await upstream.text()).slice(0, 300));
+    return error(upstream.status === 402 || upstream.status === 429 ? 429 : 502, "upstream_error");
+  }
+  xaiSocket.accept();
+
+  const [client, app] = Object.values(new WebSocketPair());
+  app.accept();
+
+  let received = 0;
+  let ended = false;
+  const endAudio = () => {
+    if (ended) return;
+    ended = true;
+    xaiSocket.send(JSON.stringify({ type: "audio.done" }));
+  };
+  const closeBoth = () => {
+    for (const socket of [app, xaiSocket]) {
+      try {
+        socket.close(1000);
+      } catch {
+        // Already closed.
+      }
+    }
+  };
+
+  // Binary frames can arrive as Blobs, whose bytes are read asynchronously;
+  // chaining keeps the audio, and the end signal after it, in order.
+  let queue = Promise.resolve();
+  app.addEventListener("message", (event) => {
+    const data = event.data as string | ArrayBuffer | Blob;
+    queue = queue.then(async () => {
+      if (ended) return;
+      if (typeof data === "string") {
+        // Only the end-of-audio signal is passed on; nothing else the app says reaches xAI.
+        if (data.includes('"audio.done"')) endAudio();
+        return;
+      }
+      const audio = data instanceof ArrayBuffer ? data : await data.arrayBuffer();
+      received += audio.byteLength;
+      if (received > MAX_AUDIO_BYTES) return endAudio();
+      xaiSocket.send(audio);
+    }).catch(closeBoth);
+  });
+  xaiSocket.addEventListener("message", (event) => {
+    try {
+      app.send(event.data);
+    } catch {
+      closeBoth();
+    }
+  });
+  app.addEventListener("close", closeBoth);
+  app.addEventListener("error", closeBoth);
+  xaiSocket.addEventListener("close", closeBoth);
+  xaiSocket.addEventListener("error", closeBoth);
+
+  return new Response(null, { status: 101, webSocket: client });
 }
 
 /**

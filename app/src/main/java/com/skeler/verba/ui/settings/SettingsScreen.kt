@@ -62,6 +62,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.skeler.verba.BuildConfig
 import com.skeler.verba.R
 import com.skeler.verba.data.OfflineLanguage
+import com.skeler.verba.model.DictationMode
 import com.skeler.verba.model.ThemeMode
 import com.skeler.verba.model.Voice
 import com.skeler.verba.model.Voices
@@ -76,6 +77,7 @@ private sealed interface SettingsRoute {
     data object Model : SettingsRoute
     data object Offline : SettingsRoute
     data object Voice : SettingsRoute
+    data object Dictation : SettingsRoute
 }
 
 private val SettingsRouteSaver = Saver<SettingsRoute, String>(
@@ -86,6 +88,7 @@ private val SettingsRouteSaver = Saver<SettingsRoute, String>(
             SettingsRoute.Model -> "model"
             SettingsRoute.Offline -> "offline"
             SettingsRoute.Voice -> "voice"
+            SettingsRoute.Dictation -> "dictation"
         }
     },
     restore = { value ->
@@ -94,6 +97,7 @@ private val SettingsRouteSaver = Saver<SettingsRoute, String>(
             "model" -> SettingsRoute.Model
             "offline" -> SettingsRoute.Offline
             "voice" -> SettingsRoute.Voice
+            "dictation" -> SettingsRoute.Dictation
             else -> SettingsRoute.Hub
         }
     },
@@ -117,6 +121,7 @@ fun SettingsScreen(
     val model by viewModel.model.collectAsStateWithLifecycle()
     val downloads by viewModel.downloads.collectAsStateWithLifecycle()
     val voice by viewModel.voice.collectAsStateWithLifecycle()
+    val dictationMode by viewModel.dictationMode.collectAsStateWithLifecycle()
 
     var route by rememberSaveable(stateSaver = SettingsRouteSaver) {
         mutableStateOf<SettingsRoute>(SettingsRoute.Hub)
@@ -151,6 +156,7 @@ fun SettingsScreen(
                     themeSummary = themeMode.copy().first,
                     modelSummary = model.name,
                     voiceSummary = voice.name,
+                    dictationSummary = dictationMode.copy().first,
                     offlineSummary = if (offlineDownloaded == 0) {
                         stringResource(R.string.settings_summary_offline_none, offlineTotal)
                     } else {
@@ -159,6 +165,7 @@ fun SettingsScreen(
                     onOpenTheme = { route = SettingsRoute.Theme },
                     onOpenModel = { route = SettingsRoute.Model },
                     onOpenVoice = { route = SettingsRoute.Voice },
+                    onOpenDictation = { route = SettingsRoute.Dictation },
                     onOpenOffline = { route = SettingsRoute.Offline },
                 )
 
@@ -180,6 +187,12 @@ fun SettingsScreen(
                     voices = viewModel.voices,
                     selected = voice,
                     onSelect = viewModel::setVoice,
+                )
+
+                SettingsRoute.Dictation -> DictationSettingsScreen(
+                    onBack = { route = SettingsRoute.Hub },
+                    selected = dictationMode,
+                    onSelect = viewModel::setDictationMode,
                 )
 
                 SettingsRoute.Offline -> OfflineSettingsScreen(
@@ -227,10 +240,12 @@ private fun SettingsHub(
     themeSummary: String,
     modelSummary: String,
     voiceSummary: String,
+    dictationSummary: String,
     offlineSummary: String,
     onOpenTheme: () -> Unit,
     onOpenModel: () -> Unit,
     onOpenVoice: () -> Unit,
+    onOpenDictation: () -> Unit,
     onOpenOffline: () -> Unit,
 ) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -258,6 +273,13 @@ private fun SettingsHub(
                 title = stringResource(R.string.settings_section_voice),
                 value = voiceSummary,
                 onClick = onOpenVoice,
+            )
+            RowDivider()
+            HubRow(
+                icon = VerbaIcons.Mic,
+                title = stringResource(R.string.settings_section_dictation),
+                value = dictationSummary,
+                onClick = onOpenDictation,
             )
             RowDivider()
             HubRow(
@@ -620,6 +642,41 @@ private fun ThemeMode.copy(): Pair<String, String> = when (this) {
         stringResource(R.string.theme_dark) to stringResource(R.string.theme_dark_subtitle)
     ThemeMode.TRUE_BLACK ->
         stringResource(R.string.theme_black) to stringResource(R.string.theme_black_subtitle)
+}
+
+/** Batch or Live speech-to-text for the mic button. */
+@Composable
+private fun DictationSettingsScreen(
+    onBack: () -> Unit,
+    selected: DictationMode,
+    onSelect: (DictationMode) -> Unit,
+) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Spacer(Modifier.height(8.dp))
+        SettingsTopBar(title = stringResource(R.string.settings_section_dictation), onBack = onBack)
+        Spacer(Modifier.height(20.dp))
+        SettingsCard {
+            DictationMode.entries.forEachIndexed { index, mode ->
+                if (index > 0) RowDivider()
+                val (title, subtitle) = mode.copy()
+                ChoiceRow(
+                    title = title,
+                    subtitle = subtitle,
+                    selected = selected == mode,
+                    onClick = { onSelect(mode) },
+                )
+            }
+        }
+        Spacer(Modifier.height(32.dp))
+    }
+}
+
+@Composable
+private fun DictationMode.copy(): Pair<String, String> = when (this) {
+    DictationMode.BATCH ->
+        stringResource(R.string.dictation_batch) to stringResource(R.string.dictation_batch_subtitle)
+    DictationMode.LIVE ->
+        stringResource(R.string.dictation_live) to stringResource(R.string.dictation_live_subtitle)
 }
 
 /**

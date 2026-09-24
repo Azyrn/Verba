@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.skeler.verba.model.DictationMode
 import com.skeler.verba.model.LanguagePair
 import com.skeler.verba.model.Languages
 import com.skeler.verba.model.ThemeMode
@@ -28,6 +29,7 @@ class SettingsRepository @Inject constructor(
         val SourceLanguage = stringPreferencesKey("source_language")
         val TargetLanguage = stringPreferencesKey("target_language")
         val Voice = stringPreferencesKey("voice_id")
+        val Dictation = stringPreferencesKey("dictation_mode")
     }
 
     val themeMode: Flow<ThemeMode> = dataStore.data
@@ -42,6 +44,11 @@ class SettingsRepository @Inject constructor(
     /** The read-aloud voice. */
     val voice: Flow<Voice> = dataStore.data
         .map { Voices.byId(it[Keys.Voice]) }
+        .distinctUntilChanged()
+
+    /** Batch (transcribe after you stop) or Live (words appear as you speak). */
+    val dictationMode: Flow<DictationMode> = dataStore.data
+        .map { DictationMode.fromName(it[Keys.Dictation]) }
         .distinctUntilChanged()
 
     /**
@@ -80,6 +87,10 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setVoice(voice: Voice) {
         dataStore.edit { it[Keys.Voice] = voice.id }
+    }
+
+    suspend fun setDictationMode(mode: DictationMode) {
+        dataStore.edit { it[Keys.Dictation] = mode.name }
     }
 
     suspend fun setLanguagePair(pair: LanguagePair) {
