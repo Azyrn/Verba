@@ -151,7 +151,7 @@ class VoiceRecorder @Inject constructor(
         private const val SAMPLE_RATE = 16_000
         private const val CHANNEL = AudioFormat.CHANNEL_IN_MONO
         private const val ENCODING = AudioFormat.ENCODING_PCM_16BIT
-        private const val MAX_BYTES = SAMPLE_RATE * 2 * MAX_MILLIS / 1000
+        private const val MAX_BYTES = SAMPLE_RATE * 2 * (MAX_MILLIS / 1000)
         private const val TARGET_PEAK = 29_000f
         private const val MAX_GAIN = 20f
         /** About -60 dBFS: below this there's nothing to transcribe. */
