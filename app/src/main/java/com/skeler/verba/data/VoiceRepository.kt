@@ -54,10 +54,11 @@ class VoiceRepository @Inject constructor(
     suspend fun speak(
         text: String,
         voice: Voice,
+        speed: Float,
         language: Language,
         play: suspend (InputStream) -> Unit,
     ): VoiceOutcome<Unit> = call {
-        val key = "${voice.id}:${language.code}:$text"
+        val key = "${voice.id}:$speed:${language.code}:$text"
         if (key == cachedKey && clip.exists()) {
             clip.inputStream().buffered().use { play(it) }
             return@call VoiceOutcome.Success(Unit)
@@ -69,6 +70,7 @@ class VoiceRepository @Inject constructor(
                 voice = voice.id,
                 language = language.code.takeUnless { language.isAuto },
                 format = "pcm",
+                speed = speed,
             ),
         )
         val body = response.body()

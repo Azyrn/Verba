@@ -308,7 +308,8 @@ class HomeViewModel @Inject constructor(
         _speech.value = SpeechState(text, playing = false)
         speechJob = viewModelScope.launch {
             val selected = settings.voice.first()
-            val outcome = voice.speak(text, selected, pair.value.target) { pcm ->
+            val speed = settings.speechSpeed.first()
+            val outcome = voice.speak(text, selected, speed, pair.value.target) { pcm ->
                 player.play(pcm) { _speech.value = SpeechState(text, playing = true) }
             }
             if (_speech.value?.text == text) _speech.value = null

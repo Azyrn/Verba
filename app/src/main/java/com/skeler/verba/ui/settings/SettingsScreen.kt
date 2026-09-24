@@ -38,6 +38,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -63,6 +66,7 @@ import com.skeler.verba.BuildConfig
 import com.skeler.verba.R
 import com.skeler.verba.data.OfflineLanguage
 import com.skeler.verba.model.DictationMode
+import com.skeler.verba.model.SpeechSpeeds
 import com.skeler.verba.model.ThemeMode
 import com.skeler.verba.model.Voice
 import com.skeler.verba.model.Voices
@@ -122,6 +126,7 @@ fun SettingsScreen(
     val downloads by viewModel.downloads.collectAsStateWithLifecycle()
     val voice by viewModel.voice.collectAsStateWithLifecycle()
     val dictationMode by viewModel.dictationMode.collectAsStateWithLifecycle()
+    val speechSpeed by viewModel.speechSpeed.collectAsStateWithLifecycle()
 
     var route by rememberSaveable(stateSaver = SettingsRouteSaver) {
         mutableStateOf<SettingsRoute>(SettingsRoute.Hub)
@@ -187,6 +192,8 @@ fun SettingsScreen(
                     voices = viewModel.voices,
                     selected = voice,
                     onSelect = viewModel::setVoice,
+                    speed = speechSpeed,
+                    onSpeed = viewModel::setSpeechSpeed,
                 )
 
                 SettingsRoute.Dictation -> DictationSettingsScreen(
@@ -393,11 +400,33 @@ private fun VoiceSettingsScreen(
     voices: List<Voice>,
     selected: Voice,
     onSelect: (Voice) -> Unit,
+    speed: Float,
+    onSpeed: (Float) -> Unit,
 ) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Spacer(Modifier.height(8.dp))
         SettingsTopBar(title = stringResource(R.string.settings_section_voice), onBack = onBack)
         Spacer(Modifier.height(20.dp))
+        SectionLabel(stringResource(R.string.voice_speed))
+        SettingsCard {
+            SingleChoiceSegmentedButtonRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+            ) {
+                SpeechSpeeds.all.forEachIndexed { index, pace ->
+                    SegmentedButton(
+                        selected = pace == speed,
+                        onClick = { onSpeed(pace) },
+                        shape = SegmentedButtonDefaults.itemShape(index, SpeechSpeeds.all.size),
+                    ) {
+                        Text(speedLabel(pace))
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+        SectionLabel(stringResource(R.string.voice_voices))
         SettingsCard {
             voices.forEachIndexed { index, candidate ->
                 if (index > 0) RowDivider()
@@ -419,6 +448,10 @@ private fun VoiceSettingsScreen(
         Spacer(Modifier.height(32.dp))
     }
 }
+
+/** 1.25 → "1.25×", 1 → "1×". */
+private fun speedLabel(pace: Float): String =
+    (if (pace % 1f == 0f) pace.toInt().toString() else pace.toString()) + "×"
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable

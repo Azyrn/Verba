@@ -7,6 +7,14 @@ data class Voice(
     val female: Boolean,
 )
 
+/** Read-aloud paces offered in Settings; xAI accepts 0.7–1.5. */
+object SpeechSpeeds {
+    const val NORMAL = 1f
+    val all: List<Float> = listOf(0.75f, NORMAL, 1.25f, 1.5f)
+
+    fun closest(value: Float?): Float = value?.let { v -> all.minBy { kotlin.math.abs(it - v) } } ?: NORMAL
+}
+
 object Voices {
 
     /** xAI's built-in voices (GET /v1/tts/voices), alphabetical. */

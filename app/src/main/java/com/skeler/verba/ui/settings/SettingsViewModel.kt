@@ -6,6 +6,7 @@ import com.skeler.verba.data.MlKitModelManager
 import com.skeler.verba.data.OfflineLanguage
 import com.skeler.verba.data.SettingsRepository
 import com.skeler.verba.model.DictationMode
+import com.skeler.verba.model.SpeechSpeeds
 import com.skeler.verba.model.ThemeMode
 import com.skeler.verba.model.VerbaModel
 import com.skeler.verba.model.VerbaModels
@@ -40,6 +41,9 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, Voices.default)
 
     val voices: List<Voice> = Voices.all
+
+    val speechSpeed: StateFlow<Float> = settings.speechSpeed
+        .stateIn(viewModelScope, SharingStarted.Eagerly, SpeechSpeeds.NORMAL)
 
     val dictationMode: StateFlow<DictationMode> = settings.dictationMode
         .stateIn(viewModelScope, SharingStarted.Eagerly, DictationMode.default)
@@ -101,6 +105,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setVoice(voice: Voice) {
         viewModelScope.launch { settings.setVoice(voice) }
+    }
+
+    fun setSpeechSpeed(speed: Float) {
+        viewModelScope.launch { settings.setSpeechSpeed(speed) }
     }
 
     fun setDictationMode(mode: DictationMode) {

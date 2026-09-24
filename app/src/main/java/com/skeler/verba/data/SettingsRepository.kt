@@ -3,10 +3,12 @@ package com.skeler.verba.data
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.skeler.verba.model.DictationMode
 import com.skeler.verba.model.LanguagePair
 import com.skeler.verba.model.Languages
+import com.skeler.verba.model.SpeechSpeeds
 import com.skeler.verba.model.ThemeMode
 import com.skeler.verba.model.VerbaModel
 import com.skeler.verba.model.VerbaModels
@@ -30,6 +32,7 @@ class SettingsRepository @Inject constructor(
         val TargetLanguage = stringPreferencesKey("target_language")
         val Voice = stringPreferencesKey("voice_id")
         val Dictation = stringPreferencesKey("dictation_mode")
+        val SpeechSpeed = floatPreferencesKey("speech_speed")
     }
 
     val themeMode: Flow<ThemeMode> = dataStore.data
@@ -44,6 +47,11 @@ class SettingsRepository @Inject constructor(
     /** The read-aloud voice. */
     val voice: Flow<Voice> = dataStore.data
         .map { Voices.byId(it[Keys.Voice]) }
+        .distinctUntilChanged()
+
+    /** Read-aloud pace, one of [SpeechSpeeds.all]. */
+    val speechSpeed: Flow<Float> = dataStore.data
+        .map { SpeechSpeeds.closest(it[Keys.SpeechSpeed]) }
         .distinctUntilChanged()
 
     /** Batch (transcribe after you stop) or Live (words appear as you speak). */
@@ -87,6 +95,10 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setVoice(voice: Voice) {
         dataStore.edit { it[Keys.Voice] = voice.id }
+    }
+
+    suspend fun setSpeechSpeed(speed: Float) {
+        dataStore.edit { it[Keys.SpeechSpeed] = SpeechSpeeds.closest(speed) }
     }
 
     suspend fun setDictationMode(mode: DictationMode) {

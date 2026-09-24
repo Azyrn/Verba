@@ -42,4 +42,6 @@ data class SpeakRequest(
     val language: String?,
     /** "pcm" for raw 24 kHz 16-bit mono, streamed; the Worker defaults to MP3. */
     val format: String? = null,
+    /** Pace, 0.7–1.5; 1 is normal. */
+    val speed: Float = 1f,
 )

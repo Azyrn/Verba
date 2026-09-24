@@ -222,9 +222,9 @@ async function transcribeLive(request: Request, env: Env): Promise<Response> {
 }
 
 /**
- * Body: `{ text, voice, language, format? }`; answers with the audio itself —
- * MP3 by default, or with `format: "pcm"` raw 24 kHz 16-bit mono the app can
- * play as it streams in.
+ * Body: `{ text, voice, language, format?, speed? }`; answers with the audio
+ * itself — MP3 by default, or with `format: "pcm"` raw 24 kHz 16-bit mono the
+ * app can play as it streams in. `speed` is xAI's 0.7–1.5 pace (1 if absent).
  */
 async function speak(request: Request, env: Env): Promise<Response> {
   const raw = (await request.json().catch(() => null)) as Record<string, unknown> | null;
@@ -232,12 +232,14 @@ async function speak(request: Request, env: Env): Promise<Response> {
   const voice = raw?.voice;
   const language = raw?.language;
   const pcm = raw?.format === "pcm";
+  const speed = raw?.speed ?? 1;
   if (typeof text !== "string" || !text.trim()) return error(400, "bad_request");
   if (text.length > MAX_SPEECH_CHARS) return error(413, "too_long");
   if (typeof voice !== "string" || !VOICE_ID.test(voice)) return error(400, "bad_request");
   if (language != null && (typeof language !== "string" || !LANGUAGE_CODE.test(language))) {
     return error(400, "bad_request");
   }
+  if (typeof speed !== "number" || !(speed >= 0.7 && speed <= 1.5)) return error(400, "bad_request");
 
   const upstream = await xai(XAI_TTS_URL, env, {
     headers: { "Content-Type": "application/json" },
@@ -245,6 +247,7 @@ async function speak(request: Request, env: Env): Promise<Response> {
       text,
       voice_id: voice,
       language: language ?? "auto",
+      speed,
       output_format: pcm
         ? { codec: "pcm", sample_rate: 24000 }
         : { codec: "mp3", sample_rate: 24000, bit_rate: 64000 },
