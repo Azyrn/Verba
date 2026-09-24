@@ -76,10 +76,13 @@ android {
     }
     splits {
         abi {
+            // -Pverba.abi=arm64-v8a builds just that one APK: quicker and
+            // lighter when all you want is to install on a phone.
+            val onlyAbi = providers.gradleProperty("verba.abi").orNull
             isEnable = true
             reset()
-            include("arm64-v8a", "armeabi-v7a")
-            isUniversalApk = true
+            if (onlyAbi != null) include(onlyAbi) else include("arm64-v8a", "armeabi-v7a")
+            isUniversalApk = onlyAbi == null
         }
     }
 }
