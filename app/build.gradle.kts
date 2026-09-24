@@ -24,18 +24,20 @@ android {
         applicationId = "com.skeler.verba"
         minSdk = 24
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.2.0"
+        versionCode = 4
+        versionName = "1.3.0"
 
+        // The translation Worker (worker/) holds the DeepSeek key; the app only
+        // knows where it is and the token that lets it in.
         buildConfigField(
             "String",
-            "OPENROUTER_API_KEY",
-            "\"${localProperties.getProperty("openrouter.apiKey").orEmpty()}\"",
+            "VERBA_API_URL",
+            "\"${localProperties.getProperty("verba.apiUrl").orEmpty()}\"",
         )
         buildConfigField(
             "String",
-            "GEMINI_API_KEY",
-            "\"${localProperties.getProperty("gemini.apiKey").orEmpty()}\"",
+            "VERBA_APP_TOKEN",
+            "\"${localProperties.getProperty("verba.appToken").orEmpty()}\"",
         )
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

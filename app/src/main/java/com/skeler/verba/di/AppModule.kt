@@ -5,7 +5,8 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStoreFile
-import com.skeler.verba.data.remote.ChatApi
+import com.skeler.verba.BuildConfig
+import com.skeler.verba.data.remote.TranslateApi
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -23,9 +24,9 @@ import retrofit2.converter.kotlinx.serialization.asConverterFactory
 @InstallIn(SingletonComponent::class)
 object AppModule {
 
-    // Retrofit demands a base URL even though every call passes an absolute
-    // @Url; this one is never hit on its own.
-    private const val PLACEHOLDER_BASE_URL = "https://openrouter.ai/api/v1/"
+    // Retrofit rejects a blank base URL; a build without verba.apiUrl gets
+    // this unroutable one, and TranslationRepository refuses to call it.
+    private const val UNCONFIGURED_URL = "https://verba.invalid/"
 
     @Provides
     @Singleton
@@ -45,15 +46,12 @@ object AppModule {
     @Singleton
     fun provideOkHttpClient(): OkHttpClient =
         OkHttpClient.Builder()
-            .connectTimeout(15, TimeUnit.SECONDS)
-            // Free-tier models queue under load; give them room to answer.
-            .readTimeout(90, TimeUnit.SECONDS)
-            // Authorization is per-call: the key depends on which provider
-            // the selected model belongs to.
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(40, TimeUnit.SECONDS)
             .addInterceptor { chain ->
                 chain.proceed(
                     chain.request().newBuilder()
-                        .header("X-Title", "Verba")
+                        .header("Authorization", "Bearer ${BuildConfig.VERBA_APP_TOKEN}")
                         .build(),
                 )
             }
@@ -61,11 +59,11 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideChatApi(client: OkHttpClient, json: Json): ChatApi =
+    fun provideTranslateApi(client: OkHttpClient, json: Json): TranslateApi =
         Retrofit.Builder()
-            .baseUrl(PLACEHOLDER_BASE_URL)
+            .baseUrl(BuildConfig.VERBA_API_URL.ifBlank { UNCONFIGURED_URL }.trimEnd('/') + "/")
             .client(client)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
-            .create(ChatApi::class.java)
+            .create(TranslateApi::class.java)
 }

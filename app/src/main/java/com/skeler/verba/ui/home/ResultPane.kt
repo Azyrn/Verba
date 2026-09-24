@@ -276,8 +276,9 @@ private fun ErrorState(
     onOpenSettings: () -> Unit,
 ) {
     val title = when (error) {
-        TranslationError.MISSING_KEY -> stringResource(R.string.error_key_missing_title)
-        TranslationError.INVALID_KEY -> stringResource(R.string.error_key_invalid_title)
+        TranslationError.NOT_CONFIGURED -> stringResource(R.string.error_config_title)
+        TranslationError.UNAUTHORIZED -> stringResource(R.string.error_unauthorized_title)
+        TranslationError.TEXT_TOO_LONG -> stringResource(R.string.error_too_long_title)
         TranslationError.NETWORK -> stringResource(R.string.error_offline_title)
         TranslationError.RATE_LIMITED -> stringResource(R.string.error_rate_title)
         TranslationError.MODEL_UNAVAILABLE -> stringResource(R.string.error_model_title, model.name)
@@ -286,8 +287,9 @@ private fun ErrorState(
         TranslationError.UNKNOWN -> stringResource(R.string.error_unknown_title)
     }
     val body = when (error) {
-        TranslationError.MISSING_KEY -> stringResource(R.string.error_key_missing_body)
-        TranslationError.INVALID_KEY -> stringResource(R.string.error_key_invalid_body)
+        TranslationError.NOT_CONFIGURED -> stringResource(R.string.error_config_body)
+        TranslationError.UNAUTHORIZED -> stringResource(R.string.error_unauthorized_body)
+        TranslationError.TEXT_TOO_LONG -> stringResource(R.string.error_too_long_body)
         TranslationError.NETWORK -> stringResource(R.string.error_offline_body)
         TranslationError.RATE_LIMITED -> stringResource(R.string.error_rate_body)
         TranslationError.MODEL_UNAVAILABLE -> stringResource(R.string.error_model_body)
@@ -295,8 +297,9 @@ private fun ErrorState(
         TranslationError.LANGUAGE_UNSUPPORTED -> stringResource(R.string.error_lang_body)
         TranslationError.UNKNOWN -> stringResource(R.string.error_unknown_body)
     }
-    val retryable = error != TranslationError.MISSING_KEY &&
-        error != TranslationError.INVALID_KEY &&
+    val retryable = error != TranslationError.NOT_CONFIGURED &&
+        error != TranslationError.UNAUTHORIZED &&
+        error != TranslationError.TEXT_TOO_LONG &&
         error != TranslationError.LANGUAGE_UNSUPPORTED
 
     Column(Modifier.fillMaxSize()) {
@@ -321,7 +324,9 @@ private fun ErrorState(
             }
             if (error == TranslationError.MODEL_UNAVAILABLE ||
                 error == TranslationError.RATE_LIMITED ||
-                error == TranslationError.LANGUAGE_UNSUPPORTED
+                error == TranslationError.LANGUAGE_UNSUPPORTED ||
+                error == TranslationError.NOT_CONFIGURED ||
+                error == TranslationError.UNAUTHORIZED
             ) {
                 TextButton(onClick = onOpenSettings) {
                     Text(stringResource(R.string.action_switch_model))

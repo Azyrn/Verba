@@ -64,7 +64,6 @@ fun HomeScreen(
     input: String,
     pair: LanguagePair,
     model: VerbaModel,
-    modelUsesSharedKey: Boolean,
     translation: TranslationUiState,
     isSaved: Boolean,
     onToggleSave: () -> Unit,
@@ -113,7 +112,7 @@ fun HomeScreen(
 
         Spacer(Modifier.height(10.dp))
 
-        ModelIndicator(model = model, sharedKey = modelUsesSharedKey, onClick = onOpenSettings)
+        ModelIndicator(model = model, onClick = onOpenSettings)
 
         Spacer(Modifier.height(18.dp))
 
@@ -153,12 +152,11 @@ fun HomeScreen(
 }
 
 /**
- * A quiet line naming the model in charge and whose quota it draws on — the
- * shared free tier, or the key the user typed in themselves. Tapping it opens
- * the settings screen where that can be changed.
+ * A quiet line naming the engine in charge — Online or Offline. Tapping it
+ * opens the settings screen where that can be changed.
  */
 @Composable
-private fun ModelIndicator(model: VerbaModel, sharedKey: Boolean, onClick: () -> Unit) {
+private fun ModelIndicator(model: VerbaModel, onClick: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -173,13 +171,6 @@ private fun ModelIndicator(model: VerbaModel, sharedKey: Boolean, onClick: () ->
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            text = stringResource(
-                if (sharedKey) R.string.model_badge_builtin else R.string.model_badge_byok,
-            ),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary,
         )
     }
 }

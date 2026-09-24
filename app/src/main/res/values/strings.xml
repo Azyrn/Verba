@@ -34,20 +34,22 @@
     <!-- Result: errors -->
     <string name="error_offline_title">You’re offline.</string>
     <string name="error_offline_body">Verba needs a connection to reach the model. Check your network, then retry.</string>
-    <string name="error_rate_title">The free tier needs a breather.</string>
-    <string name="error_rate_body">OpenRouter caps free requests per minute. A short pause clears it.</string>
+    <string name="error_rate_title">Slow down a little.</string>
+    <string name="error_rate_body">Too many translations in a short time. A brief pause clears it.</string>
     <string name="error_model_title">%1$s isn’t answering.</string>
-    <string name="error_model_body">Free models queue under load. Retry, or pick a different model in Settings.</string>
-    <string name="error_key_missing_title">No API key for this model.</string>
-    <string name="error_key_missing_body">Add one under Settings → API keys — even free models need a key behind them.</string>
-    <string name="error_key_invalid_title">The provider rejected your key.</string>
-    <string name="error_key_invalid_body">It may have been revoked. Check it under Settings → API keys.</string>
+    <string name="error_model_body">The translation service is busy or down. Retry, or switch to Offline in Settings.</string>
     <string name="error_empty_title">The model returned nothing.</string>
-    <string name="error_empty_body">Free providers do that under load. Retrying usually fixes it.</string>
+    <string name="error_empty_body">Retrying usually fixes it.</string>
     <string name="error_lang_title">Offline can’t do this pair.</string>
-    <string name="error_lang_body">On-device translation covers a fixed set of languages. Pick another pair, or switch to an online model in Settings.</string>
+    <string name="error_lang_body">On-device translation covers a fixed set of languages. Pick another pair, or switch to Online in Settings.</string>
     <string name="error_unknown_title">Something broke mid-translation.</string>
-    <string name="error_unknown_body">Not your fault. Retry, or switch models if it keeps happening.</string>
+    <string name="error_unknown_body">Not your fault. Retry, or switch to Offline if it keeps happening.</string>
+    <string name="error_config_title">Online translation isn’t set up.</string>
+    <string name="error_config_body">This build has no translation service configured. Switch to Offline in Settings.</string>
+    <string name="error_unauthorized_title">This version can’t reach the translator.</string>
+    <string name="error_unauthorized_body">Update Verba to the latest version, or switch to Offline in Settings.</string>
+    <string name="error_too_long_title">That’s too much text at once.</string>
+    <string name="error_too_long_body">Translate it in smaller parts — up to 10,000 characters each.</string>
     <string name="action_retry">Retry</string>
     <string name="action_switch_model">Switch model</string>
 
@@ -67,11 +69,8 @@
     <string name="settings_back">Back</string>
     <string name="settings_section_theme">Theme</string>
     <string name="settings_section_model">Model</string>
-    <string name="settings_section_keys">API keys</string>
     <string name="settings_section_offline">Offline languages</string>
     <string name="settings_section_about">About</string>
-    <string name="settings_summary_keys_none">None connected</string>
-    <string name="settings_summary_keys">%1$d connected</string>
     <string name="settings_summary_offline_none">%1$d available</string>
     <string name="settings_summary_offline">%1$d of %2$d downloaded</string>
 
@@ -89,25 +88,7 @@
     <string name="offline_download">Download</string>
     <string name="offline_remove">Remove download</string>
 
-    <!-- BYOK credential rows: one flow for every provider — key + model id + test -->
-    <string name="keys_add_hint">Add a key and a model id to translate on %1$s</string>
-    <string name="keys_add_subtitle_shared_free">Your own key and model lift the shared free-tier limits</string>
-    <string name="keys_verified_subtitle">%1$s · key ····%2$s</string>
-    <string name="keys_field_key">API key</string>
-    <string name="keys_field_model">Model ID</string>
-    <string name="keys_test">Test</string>
-    <string name="keys_remove">Remove key</string>
-    <string name="keys_show_key">Show key</string>
-    <string name="keys_hide_key">Hide key</string>
-    <string name="keys_model_hint">e.g. %1$s</string>
-    <string name="model_custom_subtitle">Your own model id · %1$s</string>
 
-    <!-- Credential test failures: one clear line per verdict -->
-    <string name="keys_err_key">%1$s rejected the key — check it, or that it may use this model.</string>
-    <string name="keys_err_model">%1$s has no model “%2$s” — check the id.</string>
-    <string name="keys_err_rate">%1$s is rate-limiting or out of quota — wait, then test again.</string>
-    <string name="keys_err_network">Couldn\'t reach %1$s — check your connection.</string>
-    <string name="keys_err_unknown">%1$s couldn\'t verify that pair — try again.</string>
     <string name="theme_system">Match system</string>
     <string name="theme_system_subtitle">Follows your device setting</string>
     <string name="theme_light">Light</string>
@@ -118,19 +99,7 @@
     <string name="theme_black_subtitle">Pixels off on OLED screens</string>
 
     <!-- Model descriptions: honest speed/quality trade-offs -->
-    <string name="model_nemotron_super">120B with 12B active — near-Ultra quality at an everyday speed</string>
-    <string name="model_gpt_oss_20b">Light GPT-OSS; snappy, can clip longer passages short</string>
-    <string name="model_gemini_flash_lite">Google\'s newest light Flash — quick and capable, not their flagship depth</string>
+    <string name="model_online">DeepSeek — natural, accurate translation; needs a connection</string>
     <string name="model_offline">On-device ML Kit — no connection needed once the language pair is downloaded</string>
-    <string name="model_free_tier_note">These models are free because the developer pays for them with their own API keys, shared by every person using the app — so replies can slow down when it\'s busy. Add your own key under API keys to translate on your own quota instead of the shared one.</string>
-    <string name="model_badge_builtin">Built-in</string>
-    <string name="model_badge_byok">Your API key</string>
 
-    <!-- BYOK models: same honesty, your key pays for them -->
-    <string name="model_gpt51">OpenAI\'s flagship — superb idiom; billed to your OpenAI key</string>
-    <string name="model_gpt5_mini">Fast and cheap on your OpenAI key; fine for everyday phrases</string>
-    <string name="model_sonnet5">Anthropic\'s workhorse — natural register and tone on your key</string>
-    <string name="model_haiku45">Anthropic\'s quick tier; strong for its speed, gentle on cost</string>
-    <string name="model_gemini3_pro">Google\'s top model — wide language coverage on your Google key</string>
-    <string name="model_gemini_flash">Quick Gemini; solid quality at very low per-request cost</string>
 </resources>
