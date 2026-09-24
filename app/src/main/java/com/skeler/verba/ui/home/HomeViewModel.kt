@@ -235,22 +235,11 @@ class HomeViewModel @Inject constructor(
         _speech.value = SpeechState(text, playing = false)
         speechJob = viewModelScope.launch {
             val selected = settings.voice.first()
-            when (val outcome = voice.speak(text, selected, pair.value.target)) {
-                is VoiceOutcome.Success -> {
-                    val started = player.play(outcome.value) {
-                        if (_speech.value?.text == text) _speech.value = null
-                    }
-                    if (started) _speech.value = SpeechState(text, playing = true)
-                    else {
-                        _speech.value = null
-                        notify(R.string.voice_speak_failed)
-                    }
-                }
-                is VoiceOutcome.Failure -> {
-                    _speech.value = null
-                    notify(R.string.voice_speak_failed)
-                }
+            val outcome = voice.speak(text, selected, pair.value.target) { pcm ->
+                player.play(pcm) { _speech.value = SpeechState(text, playing = true) }
             }
+            if (_speech.value?.text == text) _speech.value = null
+            if (outcome is VoiceOutcome.Failure) notify(R.string.voice_speak_failed)
         }
     }
 

@@ -30,7 +30,7 @@ const LANGUAGE_NAME = /^[\p{L} (),'-]{1,40}$/u;
 const XAI_STT_URL = "https://api.x.ai/v1/stt";
 const XAI_TTS_URL = "https://api.x.ai/v1/tts";
 const STT_MODEL = "grok-voice-transcribe-2.0";
-/** ~2 minutes of the app's 48 kbps AAC, with plenty of headroom. */
+/** 2 minutes of the app's 16 kHz 16-bit mono WAV, with a little headroom. */
 const MAX_AUDIO_BYTES = 4 * 1024 * 1024;
 const MAX_SPEECH_CHARS = 5_000;
 const LANGUAGE_CODE = /^[a-z]{2,3}(-[A-Za-z]{2,4})?$/;
@@ -110,11 +110,16 @@ async function transcribe(request: Request, env: Env): Promise<Response> {
   if (audio.byteLength === 0) return error(400, "bad_request");
   if (audio.byteLength > MAX_AUDIO_BYTES) return error(413, "too_long");
 
+  // The app sends WAV; builds before it sent M4A.
+  const wav = request.headers.get("Content-Type")?.startsWith("audio/wav") ?? false;
+
   // xAI wants every other field before the file.
   const form = new FormData();
   form.append("model", STT_MODEL);
   if (language) form.append("language", language);
-  form.append("file", new Blob([audio]), "speech.m4a");
+  // Below the 0.5 default so quiet, far-off speech isn't dropped as silence.
+  form.append("vad_threshold", "0.3");
+  form.append("file", new Blob([audio]), wav ? "speech.wav" : "speech.m4a");
 
   const upstream = await xai(XAI_STT_URL, env, { body: form });
   if (!upstream.ok) return upstream;
@@ -122,12 +127,17 @@ async function transcribe(request: Request, env: Env): Promise<Response> {
   return Response.json({ text: result.text?.trim() ?? "" });
 }
 
-/** Body: `{ text, voice, language }`; answers with the MP3 itself. */
+/**
+ * Body: `{ text, voice, language, format? }`; answers with the audio itself —
+ * MP3 by default, or with `format: "pcm"` raw 24 kHz 16-bit mono the app can
+ * play as it streams in.
+ */
 async function speak(request: Request, env: Env): Promise<Response> {
   const raw = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   const text = raw?.text;
   const voice = raw?.voice;
   const language = raw?.language;
+  const pcm = raw?.format === "pcm";
   if (typeof text !== "string" || !text.trim()) return error(400, "bad_request");
   if (text.length > MAX_SPEECH_CHARS) return error(413, "too_long");
   if (typeof voice !== "string" || !VOICE_ID.test(voice)) return error(400, "bad_request");
@@ -141,12 +151,14 @@ async function speak(request: Request, env: Env): Promise<Response> {
       text,
       voice_id: voice,
       language: language ?? "auto",
-      output_format: { codec: "mp3", sample_rate: 24000, bit_rate: 64000 },
+      output_format: pcm
+        ? { codec: "pcm", sample_rate: 24000 }
+        : { codec: "mp3", sample_rate: 24000, bit_rate: 64000 },
     }),
   });
   if (!upstream.ok) return upstream;
   return new Response(upstream.body, {
-    headers: { "Content-Type": "audio/mpeg" },
+    headers: { "Content-Type": pcm ? "audio/L16; rate=24000; channels=1" : "audio/mpeg" },
   });
 }
 

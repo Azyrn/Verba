@@ -15,14 +15,14 @@ import retrofit2.http.Streaming
  */
 interface VoiceApi {
 
-    /** [audio] is the raw M4A recording; [language] a code hint, or null to detect. */
+    /** [audio] is the WAV recording; [language] a code hint, or null to detect. */
     @POST("stt")
     suspend fun transcribe(
         @Query("language") language: String?,
         @Body audio: RequestBody,
     ): Response<TranscribeResponse>
 
-    /** Answers with MP3 bytes. */
+    /** Answers with audio bytes in [SpeakRequest.format]. */
     @Streaming
     @POST("tts")
     suspend fun speak(@Body request: SpeakRequest): Response<ResponseBody>
@@ -40,4 +40,6 @@ data class SpeakRequest(
     val voice: String,
     /** Language code of [text], or null to let the voice detect it. */
     val language: String?,
+    /** "pcm" for raw 24 kHz 16-bit mono, streamed; the Worker defaults to MP3. */
+    val format: String? = null,
 )

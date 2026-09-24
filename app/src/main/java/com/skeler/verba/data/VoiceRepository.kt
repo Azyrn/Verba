@@ -9,12 +9,13 @@ import com.skeler.verba.model.TranslationError
 import com.skeler.verba.model.Voice
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
+import java.io.FilterInputStream
 import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.cancellation.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.asRequestBody
 
@@ -31,12 +32,12 @@ class VoiceRepository @Inject constructor(
 ) {
     /** The last clip fetched, so replaying the same text in the same voice is free. */
     private var cachedKey: String? = null
-    private val clip = File(context.cacheDir, "read-aloud.mp3")
+    private val clip = File(context.cacheDir, "read-aloud.pcm")
 
     suspend fun transcribe(audio: File, language: Language): VoiceOutcome<String> = call {
         val response = api.transcribe(
             language = language.code.takeUnless { language.isAuto },
-            audio = audio.asRequestBody("audio/mp4".toMediaType()),
+            audio = audio.asRequestBody("audio/wav".toMediaType()),
         )
         if (!response.isSuccessful) {
             return@call VoiceOutcome.Failure(TranslationError.fromStatus(response.code()))
@@ -46,25 +47,41 @@ class VoiceRepository @Inject constructor(
         else VoiceOutcome.Success(text)
     }
 
-    suspend fun speak(text: String, voice: Voice, language: Language): VoiceOutcome<File> = call {
+    /**
+     * Streams [text] as speech into [play] while it downloads, keeping a copy
+     * so replaying the same text in the same voice needs no request.
+     */
+    suspend fun speak(
+        text: String,
+        voice: Voice,
+        language: Language,
+        play: suspend (InputStream) -> Unit,
+    ): VoiceOutcome<Unit> = call {
         val key = "${voice.id}:${language.code}:$text"
-        if (key == cachedKey && clip.exists()) return@call VoiceOutcome.Success(clip)
+        if (key == cachedKey && clip.exists()) {
+            clip.inputStream().buffered().use { play(it) }
+            return@call VoiceOutcome.Success(Unit)
+        }
+        cachedKey = null
         val response = api.speak(
             SpeakRequest(
                 text = text,
                 voice = voice.id,
                 language = language.code.takeUnless { language.isAuto },
+                format = "pcm",
             ),
         )
         val body = response.body()
         if (!response.isSuccessful || body == null) {
+            body?.close()
             return@call VoiceOutcome.Failure(TranslationError.fromStatus(response.code()))
         }
-        withContext(Dispatchers.IO) {
-            body.use { source -> clip.outputStream().use { source.byteStream().copyTo(it) } }
+        body.use { source ->
+            clip.outputStream().use { copy -> play(Tee(source.byteStream(), copy)) }
         }
+        // Only a clip that arrived whole is worth replaying.
         cachedKey = key
-        VoiceOutcome.Success(clip)
+        VoiceOutcome.Success(Unit)
     }
 
     private suspend fun <T> call(block: suspend () -> VoiceOutcome<T>): VoiceOutcome<T> {
@@ -83,4 +100,10 @@ class VoiceRepository @Inject constructor(
             VoiceOutcome.Failure(TranslationError.UNKNOWN)
         }
     }
+}
+
+/** Reads through [source] while writing everything read to [copy]. */
+private class Tee(source: InputStream, private val copy: OutputStream) : FilterInputStream(source) {
+    override fun read(b: ByteArray, off: Int, len: Int): Int =
+        super.read(b, off, len).also { if (it > 0) copy.write(b, off, it) }
 }
