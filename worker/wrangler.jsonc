@@ -4,9 +4,9 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-09-20",
   "observability": { "enabled": true },
-  // Per-client-IP guard so a leaked app token can't drain the DeepSeek balance.
+  // Per-client-IP guard so a leaked app token can't drain the Fireworks balance.
   "ratelimits": [
     { "name": "PER_IP", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } }
   ]
-  // Secrets (wrangler secret put): DEEPSEEK_API_KEY, XAI_API_KEY, APP_TOKEN
+  // Secrets (wrangler secret put): FIREWORKS_API_KEY, XAI_API_KEY, APP_TOKEN
 }

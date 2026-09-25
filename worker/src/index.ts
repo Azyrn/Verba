@@ -1,15 +1,15 @@
 /**
- * Verba's backend. The DeepSeek and xAI keys live only here, as Worker
+ * Verba's backend. The Fireworks and xAI keys live only here, as Worker
  * secrets. Four routes, each building its whole upstream request itself so
  * none is an open proxy for a key:
- *   POST /     — translate text (DeepSeek)
+ *   POST /     — translate text (DeepSeek on Fireworks)
  *   POST /stt  — transcribe a voice recording (xAI speech-to-text)
  *   GET  /stt/live — WebSocket: transcribe while the user speaks (xAI streaming STT)
  *   POST /tts  — read text aloud (xAI text-to-speech), returns MP3 or raw PCM
  */
 
 interface Env {
-  DEEPSEEK_API_KEY: string;
+  FIREWORKS_API_KEY: string;
   XAI_API_KEY: string;
   APP_TOKEN: string;
   PER_IP: RateLimit;
@@ -23,8 +23,8 @@ interface TranslateRequest {
   target: string;
 }
 
-const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
-const MODEL = "deepseek-flash";
+const FIREWORKS_URL = "https://api.fireworks.ai/inference/v1/chat/completions";
+const MODEL = "accounts/fireworks/models/deepseek-v4p1-flash";
 const MAX_CHARS = 10_000;
 const LANGUAGE_NAME = /^[\p{L} (),'-]{1,40}$/u;
 
@@ -63,11 +63,11 @@ async function translate(request: Request, env: Env): Promise<Response> {
 
   let upstream: Response;
   try {
-    upstream = await fetch(DEEPSEEK_URL, {
+    upstream = await fetch(FIREWORKS_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${env.DEEPSEEK_API_KEY}`,
+        Authorization: `Bearer ${env.FIREWORKS_API_KEY}`,
       },
       body: JSON.stringify({
         model: MODEL,
@@ -75,7 +75,10 @@ async function translate(request: Request, env: Env): Promise<Response> {
           { role: "system", content: systemPrompt(body) },
           { role: "user", content: body.text },
         ],
-        thinking: { type: "disabled" },
+        // Thinking is on by default for this model and multiplies latency.
+        reasoning_effort: "none",
+        // Lowest-latency serving tier.
+        service_tier: "priority",
         temperature: 1.0,
         // Room for the translation to run longer than the source (e.g. into
         // a wordier script), without leaving the model an open-ended budget.
@@ -89,7 +92,7 @@ async function translate(request: Request, env: Env): Promise<Response> {
   }
 
   if (!upstream.ok) {
-    console.error("deepseek", upstream.status, (await upstream.text()).slice(0, 300));
+    console.error("fireworks", upstream.status, (await upstream.text()).slice(0, 300));
     return error(upstream.status === 402 || upstream.status === 429 ? 429 : 502, "upstream_error");
   }
   const completion = await upstream.json<{
