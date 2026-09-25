@@ -9,6 +9,7 @@ import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
@@ -17,4 +18,8 @@ class MainViewModel @Inject constructor(
 
     val themeMode: StateFlow<ThemeMode> = settings.themeMode
         .stateIn(viewModelScope, SharingStarted.Eagerly, ThemeMode.SYSTEM)
+
+    init {
+        viewModelScope.launch { settings.clearLegacyKeys() }
+    }
 }

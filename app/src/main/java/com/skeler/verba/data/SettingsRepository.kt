@@ -3,13 +3,17 @@ package com.skeler.verba.data
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.skeler.verba.model.DictationMode
 import com.skeler.verba.model.LanguagePair
 import com.skeler.verba.model.Languages
-import com.skeler.verba.model.Provider
+import com.skeler.verba.model.SpeechSpeeds
 import com.skeler.verba.model.ThemeMode
 import com.skeler.verba.model.VerbaModel
 import com.skeler.verba.model.VerbaModels
+import com.skeler.verba.model.Voice
+import com.skeler.verba.model.Voices
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
@@ -19,111 +23,54 @@ import kotlinx.coroutines.flow.map
 @Singleton
 class SettingsRepository @Inject constructor(
     private val dataStore: DataStore<Preferences>,
-    private val keyCipher: KeyCipher,
 ) {
 
     private object Keys {
         val Theme = stringPreferencesKey("theme_mode")
         val Model = stringPreferencesKey("model_id")
-        val ModelProvider = stringPreferencesKey("model_provider")
         val SourceLanguage = stringPreferencesKey("source_language")
         val TargetLanguage = stringPreferencesKey("target_language")
-
-        fun apiKey(provider: Provider) =
-            stringPreferencesKey("api_key_${provider.name.lowercase()}")
-
-        fun customModel(provider: Provider) =
-            stringPreferencesKey("custom_model_${provider.name.lowercase()}")
+        val Voice = stringPreferencesKey("voice_id")
+        val Dictation = stringPreferencesKey("dictation_mode")
+        val SpeechSpeed = floatPreferencesKey("speech_speed")
     }
 
     val themeMode: Flow<ThemeMode> = dataStore.data
         .map { ThemeMode.fromName(it[Keys.Theme]) }
         .distinctUntilChanged()
 
-    /**
-     * The selected model, falling back to the default if its provider's key
-     * has since been removed — a BYOK model without a key can never answer —
-     * or if it was a hand-typed model the user has since cleared. Anything in
-     * the bundled free tier ([VerbaModels.all]) is always unlocked, whichever
-     * provider backs it — that's what makes it free — so only a preset from
-     * [VerbaModels.byok] or a hand-typed id needs a personal key to stick.
-     */
+    /** The selected engine; a selection from before Online/Offline resolves to the default. */
     val model: Flow<VerbaModel> = dataStore.data
-        .map { preferences ->
-            val id = preferences[Keys.Model].orEmpty()
-            val provider = preferences.storedProvider()
-            // Preset lookup needs the stored provider too — a typed id that
-            // coincidentally matches another provider's preset id must not
-            // be mistaken for that preset (see VerbaModels.preset).
-            val selected = provider?.let { VerbaModels.preset(it, id) }
-                ?: preferences.customSelection(id)
-                ?: VerbaModels.default
-            val unlocked = VerbaModels.all.any { it.id == selected.id } ||
-                !preferences[Keys.apiKey(selected.provider)].isNullOrBlank()
-            if (unlocked) selected else VerbaModels.default
-        }
+        .map { VerbaModels.byId(it[Keys.Model]) }
         .distinctUntilChanged()
 
-    private fun Preferences.storedProvider(): Provider? =
-        this[Keys.ModelProvider]?.let { name -> Provider.entries.firstOrNull { it.name == name } }
-
-    /**
-     * Rebuilds a hand-typed selection from the stored provider, but only while
-     * that provider still holds exactly this model id — a stale selection whose
-     * custom model was edited or cleared resolves to null.
-     */
-    private fun Preferences.customSelection(id: String): VerbaModel? {
-        if (id.isBlank()) return null
-        val provider = storedProvider() ?: return null
-        return if (this[Keys.customModel(provider)] == id) {
-            VerbaModel.custom(provider, id)
-        } else {
-            null
-        }
-    }
-
-    /** Personal model ids the user typed per provider; blanks are absent. */
-    val customModels: Flow<Map<Provider, String>> = dataStore.data
-        .map { preferences ->
-            Provider.entries.mapNotNull { provider ->
-                preferences[Keys.customModel(provider)]
-                    ?.takeIf { it.isNotBlank() }
-                    ?.let { provider to it }
-            }.toMap()
-        }
+    /** The read-aloud voice. */
+    val voice: Flow<Voice> = dataStore.data
+        .map { Voices.byId(it[Keys.Voice]) }
         .distinctUntilChanged()
 
-    /** Personal keys by provider; providers without a key are absent. */
-    val apiKeys: Flow<Map<Provider, String>> = dataStore.data
-        .map { preferences ->
-            Provider.entries.mapNotNull { provider ->
-                preferences[Keys.apiKey(provider)]
-                    ?.takeIf { it.isNotBlank() }
-                    ?.let(::decryptStoredKey)
-                    ?.let { provider to it }
-            }.toMap()
-        }
+    /** Read-aloud pace, one of [SpeechSpeeds.all]. */
+    val speechSpeed: Flow<Float> = dataStore.data
+        .map { SpeechSpeeds.closest(it[Keys.SpeechSpeed]) }
         .distinctUntilChanged()
 
-    fun apiKey(provider: Provider): Flow<String?> = dataStore.data
-        .map { it[Keys.apiKey(provider)]?.takeIf(String::isNotBlank)?.let(::decryptStoredKey) }
+    /** Batch (transcribe after you stop) or Live (words appear as you speak). */
+    val dictationMode: Flow<DictationMode> = dataStore.data
+        .map { DictationMode.fromName(it[Keys.Dictation]) }
         .distinctUntilChanged()
 
     /**
-     * A key saved before encryption shipped is still plain text on disk —
-     * [KeyCipher.decrypt] can't recognize it as ciphertext and returns null,
-     * so falling back to the raw stored value here is what keeps an
-     * already-configured key from silently vanishing on upgrade. It's
-     * re-encrypted the moment the user next saves that field.
+     * Earlier versions stored personal API keys (encrypted) and per-provider
+     * model ids. Nothing reads them any more, so they're dropped rather than
+     * left on disk.
      */
-    private fun decryptStoredKey(stored: String): String = keyCipher.decrypt(stored) ?: stored
-
-    suspend fun setApiKey(provider: Provider, key: String) {
-        dataStore.edit { it[Keys.apiKey(provider)] = keyCipher.encrypt(key.trim()) }
-    }
-
-    suspend fun clearApiKey(provider: Provider) {
-        dataStore.edit { it.remove(Keys.apiKey(provider)) }
+    suspend fun clearLegacyKeys() {
+        dataStore.edit { prefs ->
+            prefs.asMap().keys
+                .filter { it.name.startsWith("api_key_") || it.name.startsWith("custom_model_") ||
+                    it.name == "model_provider" }
+                .forEach { prefs.remove(it) }
+        }
     }
 
     val languagePair: Flow<LanguagePair> = dataStore.data
@@ -143,18 +90,19 @@ class SettingsRepository @Inject constructor(
     }
 
     suspend fun setModel(model: VerbaModel) {
-        dataStore.edit {
-            it[Keys.Model] = model.id
-            it[Keys.ModelProvider] = model.provider.name
-        }
+        dataStore.edit { it[Keys.Model] = model.id }
     }
 
-    suspend fun setCustomModel(provider: Provider, id: String) {
-        dataStore.edit { it[Keys.customModel(provider)] = id.trim() }
+    suspend fun setVoice(voice: Voice) {
+        dataStore.edit { it[Keys.Voice] = voice.id }
     }
 
-    suspend fun clearCustomModel(provider: Provider) {
-        dataStore.edit { it.remove(Keys.customModel(provider)) }
+    suspend fun setSpeechSpeed(speed: Float) {
+        dataStore.edit { it[Keys.SpeechSpeed] = SpeechSpeeds.closest(speed) }
+    }
+
+    suspend fun setDictationMode(mode: DictationMode) {
+        dataStore.edit { it[Keys.Dictation] = mode.name }
     }
 
     suspend fun setLanguagePair(pair: LanguagePair) {

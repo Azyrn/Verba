@@ -1,6 +1,15 @@
 package com.skeler.verba.ui.home
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -36,20 +45,30 @@ import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import com.skeler.verba.R
 import com.skeler.verba.model.LanguagePair
 import com.skeler.verba.model.LanguageSide
 import com.skeler.verba.model.VerbaModel
+import com.skeler.verba.ui.textDirectionOf
 import com.skeler.verba.ui.theme.VerbaIcons
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -64,10 +83,16 @@ fun HomeScreen(
     input: String,
     pair: LanguagePair,
     model: VerbaModel,
-    modelUsesSharedKey: Boolean,
     translation: TranslationUiState,
     isSaved: Boolean,
+    voiceInput: VoiceInputState,
+    voiceNotice: Int?,
+    speech: SpeechState?,
     onToggleSave: () -> Unit,
+    onStartRecording: () -> Unit,
+    onStopRecording: () -> Unit,
+    onMicDenied: () -> Unit,
+    onToggleSpeak: (String) -> Unit,
     onInputChange: (String) -> Unit,
     onClearInput: () -> Unit,
     onSwapLanguages: () -> Unit,
@@ -113,16 +138,41 @@ fun HomeScreen(
 
         Spacer(Modifier.height(10.dp))
 
-        ModelIndicator(model = model, sharedKey = modelUsesSharedKey, onClick = onOpenSettings)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) {
+                ModelIndicator(model = model, onClick = onOpenSettings)
+            }
+            // Up here rather than beside the input, so pasted text gets the
+            // input's full width to read in.
+            PasteButton(onPaste = onInputChange)
+        }
 
         Spacer(Modifier.height(18.dp))
 
         SourceInput(
             input = input,
             isTranslating = translation is TranslationUiState.Loading,
+            voiceInput = voiceInput,
             onInputChange = onInputChange,
             onClearInput = onClearInput,
+            onStartRecording = onStartRecording,
+            onStopRecording = onStopRecording,
+            onMicDenied = onMicDenied,
         )
+
+        AnimatedVisibility(visible = voiceNotice != null, enter = fadeIn(), exit = fadeOut()) {
+            // Keep the last message through the fade-out rather than blanking it.
+            var shown by remember { mutableStateOf(voiceNotice) }
+            if (voiceNotice != null) shown = voiceNotice
+            shown?.let {
+                Text(
+                    text = stringResource(it),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+        }
 
         Spacer(Modifier.height(14.dp))
 
@@ -142,7 +192,9 @@ fun HomeScreen(
             pair = pair,
             model = model,
             isSaved = isSaved,
+            speech = speech,
             onToggleSave = onToggleSave,
+            onToggleSpeak = onToggleSpeak,
             onRetry = onRetry,
             onOpenSettings = onOpenSettings,
             modifier = Modifier
@@ -153,12 +205,11 @@ fun HomeScreen(
 }
 
 /**
- * A quiet line naming the model in charge and whose quota it draws on — the
- * shared free tier, or the key the user typed in themselves. Tapping it opens
- * the settings screen where that can be changed.
+ * A quiet line naming the engine in charge — Online or Offline. Tapping it
+ * opens the settings screen where that can be changed.
  */
 @Composable
-private fun ModelIndicator(model: VerbaModel, sharedKey: Boolean, onClick: () -> Unit) {
+private fun ModelIndicator(model: VerbaModel, onClick: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -174,13 +225,6 @@ private fun ModelIndicator(model: VerbaModel, sharedKey: Boolean, onClick: () ->
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        Text(
-            text = stringResource(
-                if (sharedKey) R.string.model_badge_builtin else R.string.model_badge_byok,
-            ),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary,
-        )
     }
 }
 
@@ -189,19 +233,34 @@ private fun ModelIndicator(model: VerbaModel, sharedKey: Boolean, onClick: () ->
 private fun SourceInput(
     input: String,
     isTranslating: Boolean,
+    voiceInput: VoiceInputState,
     onInputChange: (String) -> Unit,
     onClearInput: () -> Unit,
+    onStartRecording: () -> Unit,
+    onStopRecording: () -> Unit,
+    onMicDenied: () -> Unit,
 ) {
     val inputStyle: TextStyle = MaterialTheme.typography.bodyLarge.copy(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textDirection = textDirectionOf(input),
     )
     Row(
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        // Text that arrives from outside (dictation, paste, clear) puts the
+        // caret at its end, and the field scrolls to keep the caret in view —
+        // so live dictation always shows its newest words.
+        var field by remember { mutableStateOf(TextFieldValue(input, TextRange(input.length))) }
+        LaunchedEffect(input) {
+            if (field.text != input) field = TextFieldValue(input, TextRange(input.length))
+        }
         BasicTextField(
-            value = input,
-            onValueChange = onInputChange,
+            value = field,
+            onValueChange = {
+                field = it
+                if (it.text != input) onInputChange(it.text)
+            },
             textStyle = inputStyle,
             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
             maxLines = 4,
@@ -222,15 +281,15 @@ private fun SourceInput(
             },
         )
 
-        Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
+        // Spinner while translating, clear once there's text; otherwise the
+        // slot takes no room at all.
+        if (isTranslating || input.isNotEmpty()) Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
             when {
                 isTranslating -> LoadingIndicator(
                     modifier = Modifier.size(24.dp),
                     color = MaterialTheme.colorScheme.primary,
                 )
 
-                // The slot holds one quiet affordance: clear when there is
-                // text, paste when there isn't.
                 input.isNotEmpty() -> androidx.compose.animation.AnimatedVisibility(
                     visible = true,
                     enter = fadeIn() + scaleIn(initialScale = 0.6f),
@@ -245,8 +304,84 @@ private fun SourceInput(
                         )
                     }
                 }
+            }
+        }
 
-                else -> PasteButton(onPaste = onInputChange)
+        MicButton(
+            state = voiceInput,
+            onStart = onStartRecording,
+            onStop = onStopRecording,
+            onDenied = onMicDenied,
+        )
+    }
+}
+
+/**
+ * Dictation: tap to listen, tap again to stop and transcribe. While listening
+ * the glyph turns into a lapis stop square that breathes, so it's plain the
+ * mic is live.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun MicButton(
+    state: VoiceInputState,
+    onStart: () -> Unit,
+    onStop: () -> Unit,
+    onDenied: () -> Unit,
+) {
+    val context = LocalContext.current
+    val permission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted -> if (granted) onStart() else onDenied() }
+
+    Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
+        when (state) {
+            VoiceInputState.Transcribing -> LoadingIndicator(
+                modifier = Modifier.size(24.dp),
+                color = MaterialTheme.colorScheme.primary,
+            )
+
+            VoiceInputState.Recording -> {
+                val pulse by rememberInfiniteTransition(label = "mic").animateFloat(
+                    initialValue = 1f,
+                    targetValue = 0.45f,
+                    animationSpec = infiniteRepeatable(tween(700), RepeatMode.Reverse),
+                    label = "micPulse",
+                )
+                IconButton(
+                    onClick = onStop,
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
+                ) {
+                    Icon(
+                        imageVector = VerbaIcons.Stop,
+                        contentDescription = stringResource(R.string.voice_stop),
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .size(16.dp)
+                            .graphicsLayer { alpha = pulse },
+                    )
+                }
+            }
+
+            VoiceInputState.Idle -> IconButton(
+                onClick = {
+                    val granted = ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.RECORD_AUDIO,
+                    ) == PackageManager.PERMISSION_GRANTED
+                    if (granted) onStart() else permission.launch(Manifest.permission.RECORD_AUDIO)
+                },
+                modifier = Modifier.size(28.dp),
+            ) {
+                Icon(
+                    imageVector = VerbaIcons.Mic,
+                    contentDescription = stringResource(R.string.voice_record),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(19.dp),
+                )
             }
         }
     }

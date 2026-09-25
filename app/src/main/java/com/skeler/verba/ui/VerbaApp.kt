@@ -110,9 +110,11 @@ fun VerbaApp() {
     val input by homeViewModel.input.collectAsStateWithLifecycle()
     val pair by homeViewModel.pair.collectAsStateWithLifecycle()
     val model by homeViewModel.model.collectAsStateWithLifecycle()
-    val modelUsesSharedKey by homeViewModel.modelUsesSharedKey.collectAsStateWithLifecycle()
     val translation by homeViewModel.translation.collectAsStateWithLifecycle()
     val isSaved by homeViewModel.isCurrentSaved.collectAsStateWithLifecycle()
+    val voiceInput by homeViewModel.voiceInput.collectAsStateWithLifecycle()
+    val voiceNotice by homeViewModel.voiceNotice.collectAsStateWithLifecycle()
+    val speech by homeViewModel.speech.collectAsStateWithLifecycle()
 
     AnimatedContent(
         targetState = screen,
@@ -132,10 +134,16 @@ fun VerbaApp() {
                 input = input,
                 pair = pair,
                 model = model,
-                modelUsesSharedKey = modelUsesSharedKey,
                 translation = translation,
                 isSaved = isSaved,
+                voiceInput = voiceInput,
+                voiceNotice = voiceNotice,
+                speech = speech,
                 onToggleSave = homeViewModel::toggleSave,
+                onStartRecording = homeViewModel::startRecording,
+                onStopRecording = homeViewModel::stopRecording,
+                onMicDenied = homeViewModel::onMicPermissionDenied,
+                onToggleSpeak = homeViewModel::toggleSpeak,
                 onInputChange = homeViewModel::onInputChange,
                 onClearInput = homeViewModel::clearInput,
                 onSwapLanguages = homeViewModel::swapLanguages,

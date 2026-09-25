@@ -1,9 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   API keys live encrypted inside verba_settings, but the point of Keystore
-   encryption is that the ciphertext can't be decrypted off this device
-   anyway — excluding the file keeps a useless, undecryptable blob (and any
-   saved translations alongside it) out of cloud backup and device transfer
-   entirely, rather than relying on that alone.
+   verba_settings holds preferences and saved translations, which stay on this
+   device: kept out of cloud backup and device transfer.
 -->
 <data-extraction-rules>
     <cloud-backup>

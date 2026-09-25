@@ -24,18 +24,20 @@ android {
         applicationId = "com.skeler.verba"
         minSdk = 24
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.2.0"
+        versionCode = 5
+        versionName = "1.4.0"
 
+        // The translation Worker (worker/) holds the DeepSeek key; the app only
+        // knows where it is and the token that lets it in.
         buildConfigField(
             "String",
-            "OPENROUTER_API_KEY",
-            "\"${localProperties.getProperty("openrouter.apiKey").orEmpty()}\"",
+            "VERBA_API_URL",
+            "\"${localProperties.getProperty("verba.apiUrl").orEmpty()}\"",
         )
         buildConfigField(
             "String",
-            "GEMINI_API_KEY",
-            "\"${localProperties.getProperty("gemini.apiKey").orEmpty()}\"",
+            "VERBA_APP_TOKEN",
+            "\"${localProperties.getProperty("verba.appToken").orEmpty()}\"",
         )
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -74,10 +76,13 @@ android {
     }
     splits {
         abi {
+            // -Pverba.abi=arm64-v8a builds just that one APK: quicker and
+            // lighter when all you want is to install on a phone.
+            val onlyAbi = providers.gradleProperty("verba.abi").orNull
             isEnable = true
             reset()
-            include("arm64-v8a", "armeabi-v7a")
-            isUniversalApk = true
+            if (onlyAbi != null) include(onlyAbi) else include("arm64-v8a", "armeabi-v7a")
+            isUniversalApk = onlyAbi == null
         }
     }
 }

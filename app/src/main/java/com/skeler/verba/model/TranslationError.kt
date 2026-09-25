@@ -2,22 +2,25 @@ package com.skeler.verba.model
 
 /** Everything that can go wrong between hitting send and getting a translation back. */
 enum class TranslationError {
-    /** No key in local.properties — the app can't talk to OpenRouter at all. */
-    MISSING_KEY,
+    /** This build has no translation Worker URL or token configured. */
+    NOT_CONFIGURED,
 
-    /** OpenRouter answered 401/403: the configured key is wrong or revoked. */
-    INVALID_KEY,
+    /** The Worker rejected the app's token — this build is too old or tampered with. */
+    UNAUTHORIZED,
 
-    /** The request never reached OpenRouter — offline, DNS, timeout. */
+    /** The request never reached the Worker — offline, DNS, timeout. */
     NETWORK,
 
-    /** 402/429: the free tier's per-minute or per-day cap was hit. */
+    /** 429: too many requests from this device, or the upstream is throttling. */
     RATE_LIMITED,
 
-    /** The chosen model is down, overloaded upstream, or was delisted. */
+    /** The Worker reached DeepSeek but it failed or didn't answer in time. */
     MODEL_UNAVAILABLE,
 
-    /** A 200 with no usable text in it — free providers do this under load. */
+    /** 413: more text than one request may carry. */
+    TEXT_TOO_LONG,
+
+    /** A 200 with no usable text in it. */
     EMPTY_RESPONSE,
 
     /** Offline engine can't handle this language pair — ML Kit covers a fixed set. */
@@ -25,4 +28,16 @@ enum class TranslationError {
 
     /** Anything else. */
     UNKNOWN,
+    ;
+
+    companion object {
+        /** Status codes as worker/src/index.ts sends them. */
+        fun fromStatus(code: Int): TranslationError = when (code) {
+            401 -> UNAUTHORIZED
+            413 -> TEXT_TOO_LONG
+            429 -> RATE_LIMITED
+            502, 504 -> MODEL_UNAVAILABLE
+            else -> UNKNOWN
+        }
+    }
 }

@@ -22,6 +22,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -46,6 +47,7 @@ import com.skeler.verba.R
 import com.skeler.verba.model.LanguagePair
 import com.skeler.verba.model.TranslationError
 import com.skeler.verba.model.VerbaModel
+import com.skeler.verba.ui.bidiText
 import com.skeler.verba.ui.theme.VerbaIcons
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -62,7 +64,9 @@ fun ResultPane(
     pair: LanguagePair,
     model: VerbaModel,
     isSaved: Boolean,
+    speech: SpeechState?,
     onToggleSave: () -> Unit,
+    onToggleSpeak: (String) -> Unit,
     onRetry: () -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
@@ -95,7 +99,9 @@ fun ResultPane(
                 text = state.text,
                 pair = pair,
                 isSaved = isSaved,
+                speech = speech?.takeIf { it.text == state.text },
                 onToggleSave = onToggleSave,
+                onToggleSpeak = onToggleSpeak,
             )
             is TranslationUiState.Error -> ErrorState(
                 error = state.error,
@@ -113,7 +119,9 @@ private fun Translation(
     pair: LanguagePair,
     dimmed: Boolean = false,
     isSaved: Boolean = false,
+    speech: SpeechState? = null,
     onToggleSave: (() -> Unit)? = null,
+    onToggleSpeak: ((String) -> Unit)? = null,
 ) {
     Column(
         modifier = Modifier
@@ -129,14 +137,20 @@ private fun Translation(
         Spacer(Modifier.height(12.dp))
         SelectionContainer {
             Text(
-                text = text,
+                text = bidiText(text),
                 style = resultStyle(text.length),
                 color = MaterialTheme.colorScheme.onBackground,
             )
         }
-        if (!dimmed && onToggleSave != null) {
+        if (!dimmed && onToggleSave != null && onToggleSpeak != null) {
             Spacer(Modifier.height(16.dp))
-            ResultActions(text = text, isSaved = isSaved, onToggleSave = onToggleSave)
+            ResultActions(
+                text = text,
+                isSaved = isSaved,
+                speech = speech,
+                onToggleSave = onToggleSave,
+                onToggleSpeak = { onToggleSpeak(text) },
+            )
         }
         Spacer(Modifier.height(32.dp))
     }
@@ -149,14 +163,19 @@ private enum class ActionNotice(val label: Int) {
 }
 
 /**
- * Copy and save, weighted alike: two quiet glyphs under the answer, each
- * acknowledged by a small lapis word in place of any toast.
+ * Listen, copy and save, weighted alike: quiet glyphs under the answer. Copy
+ * and save are acknowledged by a small lapis word in place of any toast;
+ * the speaker shows its own state — spinner while fetching, lapis stop while
+ * playing.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ResultActions(
     text: String,
     isSaved: Boolean,
+    speech: SpeechState?,
     onToggleSave: () -> Unit,
+    onToggleSpeak: () -> Unit,
 ) {
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
@@ -179,6 +198,26 @@ private fun ResultActions(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
+        IconButton(onClick = onToggleSpeak, modifier = Modifier.size(36.dp)) {
+            when {
+                speech == null -> Icon(
+                    imageVector = VerbaIcons.VolumeUp,
+                    contentDescription = stringResource(R.string.action_speak),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(19.dp),
+                )
+                !speech.playing -> LoadingIndicator(
+                    modifier = Modifier.size(22.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                else -> Icon(
+                    imageVector = VerbaIcons.Stop,
+                    contentDescription = stringResource(R.string.action_speak_stop),
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
         IconButton(
             onClick = {
                 scope.launch {
@@ -276,8 +315,9 @@ private fun ErrorState(
     onOpenSettings: () -> Unit,
 ) {
     val title = when (error) {
-        TranslationError.MISSING_KEY -> stringResource(R.string.error_key_missing_title)
-        TranslationError.INVALID_KEY -> stringResource(R.string.error_key_invalid_title)
+        TranslationError.NOT_CONFIGURED -> stringResource(R.string.error_config_title)
+        TranslationError.UNAUTHORIZED -> stringResource(R.string.error_unauthorized_title)
+        TranslationError.TEXT_TOO_LONG -> stringResource(R.string.error_too_long_title)
         TranslationError.NETWORK -> stringResource(R.string.error_offline_title)
         TranslationError.RATE_LIMITED -> stringResource(R.string.error_rate_title)
         TranslationError.MODEL_UNAVAILABLE -> stringResource(R.string.error_model_title, model.name)
@@ -286,8 +326,9 @@ private fun ErrorState(
         TranslationError.UNKNOWN -> stringResource(R.string.error_unknown_title)
     }
     val body = when (error) {
-        TranslationError.MISSING_KEY -> stringResource(R.string.error_key_missing_body)
-        TranslationError.INVALID_KEY -> stringResource(R.string.error_key_invalid_body)
+        TranslationError.NOT_CONFIGURED -> stringResource(R.string.error_config_body)
+        TranslationError.UNAUTHORIZED -> stringResource(R.string.error_unauthorized_body)
+        TranslationError.TEXT_TOO_LONG -> stringResource(R.string.error_too_long_body)
         TranslationError.NETWORK -> stringResource(R.string.error_offline_body)
         TranslationError.RATE_LIMITED -> stringResource(R.string.error_rate_body)
         TranslationError.MODEL_UNAVAILABLE -> stringResource(R.string.error_model_body)
@@ -295,8 +336,9 @@ private fun ErrorState(
         TranslationError.LANGUAGE_UNSUPPORTED -> stringResource(R.string.error_lang_body)
         TranslationError.UNKNOWN -> stringResource(R.string.error_unknown_body)
     }
-    val retryable = error != TranslationError.MISSING_KEY &&
-        error != TranslationError.INVALID_KEY &&
+    val retryable = error != TranslationError.NOT_CONFIGURED &&
+        error != TranslationError.UNAUTHORIZED &&
+        error != TranslationError.TEXT_TOO_LONG &&
         error != TranslationError.LANGUAGE_UNSUPPORTED
 
     Column(Modifier.fillMaxSize()) {
@@ -321,7 +363,9 @@ private fun ErrorState(
             }
             if (error == TranslationError.MODEL_UNAVAILABLE ||
                 error == TranslationError.RATE_LIMITED ||
-                error == TranslationError.LANGUAGE_UNSUPPORTED
+                error == TranslationError.LANGUAGE_UNSUPPORTED ||
+                error == TranslationError.NOT_CONFIGURED ||
+                error == TranslationError.UNAUTHORIZED
             ) {
                 TextButton(onClick = onOpenSettings) {
                     Text(stringResource(R.string.action_switch_model))

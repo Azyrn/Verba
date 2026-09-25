@@ -28,13 +28,9 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -42,22 +38,20 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -65,19 +59,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.skeler.verba.BuildConfig
 import com.skeler.verba.R
-import com.skeler.verba.data.CredentialCheck
 import com.skeler.verba.data.OfflineLanguage
-import com.skeler.verba.model.Provider
+import com.skeler.verba.model.DictationMode
+import com.skeler.verba.model.SpeechSpeeds
 import com.skeler.verba.model.ThemeMode
+import com.skeler.verba.model.Voice
+import com.skeler.verba.model.Voices
 import com.skeler.verba.ui.axisEnter
 import com.skeler.verba.ui.axisExit
 import com.skeler.verba.ui.theme.VerbaIcons
@@ -87,8 +79,9 @@ private sealed interface SettingsRoute {
     data object Hub : SettingsRoute
     data object Theme : SettingsRoute
     data object Model : SettingsRoute
-    data object Keys : SettingsRoute
     data object Offline : SettingsRoute
+    data object Voice : SettingsRoute
+    data object Dictation : SettingsRoute
 }
 
 private val SettingsRouteSaver = Saver<SettingsRoute, String>(
@@ -97,24 +90,26 @@ private val SettingsRouteSaver = Saver<SettingsRoute, String>(
             SettingsRoute.Hub -> "hub"
             SettingsRoute.Theme -> "theme"
             SettingsRoute.Model -> "model"
-            SettingsRoute.Keys -> "keys"
             SettingsRoute.Offline -> "offline"
+            SettingsRoute.Voice -> "voice"
+            SettingsRoute.Dictation -> "dictation"
         }
     },
     restore = { value ->
         when (value) {
             "theme" -> SettingsRoute.Theme
             "model" -> SettingsRoute.Model
-            "keys" -> SettingsRoute.Keys
             "offline" -> SettingsRoute.Offline
+            "voice" -> SettingsRoute.Voice
+            "dictation" -> SettingsRoute.Dictation
             else -> SettingsRoute.Hub
         }
     },
 )
 
 /**
- * Settings reads as a small app of its own: a hub of four category rows —
- * Appearance, Model, API keys, Offline languages — each opening into its own
+ * Settings reads as a small app of its own: a hub of category rows —
+ * Theme, Model, Voice, Offline languages — each opening into its own
  * screen with the same shared-axis push VerbaApp uses between top-level
  * screens, so drilling in feels continuous with the rest of the app rather
  * than a different navigation idiom bolted on. Only the hub carries About and
@@ -128,11 +123,10 @@ fun SettingsScreen(
 ) {
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val model by viewModel.model.collectAsStateWithLifecycle()
-    val models by viewModel.models.collectAsStateWithLifecycle()
-    val apiKeys by viewModel.apiKeys.collectAsStateWithLifecycle()
-    val customModels by viewModel.customModels.collectAsStateWithLifecycle()
-    val keyRows by viewModel.keyRows.collectAsStateWithLifecycle()
     val downloads by viewModel.downloads.collectAsStateWithLifecycle()
+    val voice by viewModel.voice.collectAsStateWithLifecycle()
+    val dictationMode by viewModel.dictationMode.collectAsStateWithLifecycle()
+    val speechSpeed by viewModel.speechSpeed.collectAsStateWithLifecycle()
 
     var route by rememberSaveable(stateSaver = SettingsRouteSaver) {
         mutableStateOf<SettingsRoute>(SettingsRoute.Hub)
@@ -142,9 +136,6 @@ fun SettingsScreen(
     // through to VerbaApp's own back handler.
     BackHandler(enabled = route != SettingsRoute.Hub) { route = SettingsRoute.Hub }
 
-    val connectedKeys = Provider.entries.count {
-        !it.onDevice && apiKeys[it] != null && customModels[it] != null
-    }
     val offlineTotal = viewModel.offlineLanguages.size
     val offlineDownloaded = viewModel.offlineLanguages.count {
         downloads[it.tag] == DownloadState.Present
@@ -169,11 +160,8 @@ fun SettingsScreen(
                     onBack = onBack,
                     themeSummary = themeMode.copy().first,
                     modelSummary = model.name,
-                    keysSummary = if (connectedKeys == 0) {
-                        stringResource(R.string.settings_summary_keys_none)
-                    } else {
-                        stringResource(R.string.settings_summary_keys, connectedKeys)
-                    },
+                    voiceSummary = voice.name,
+                    dictationSummary = dictationMode.copy().first,
                     offlineSummary = if (offlineDownloaded == 0) {
                         stringResource(R.string.settings_summary_offline_none, offlineTotal)
                     } else {
@@ -181,7 +169,8 @@ fun SettingsScreen(
                     },
                     onOpenTheme = { route = SettingsRoute.Theme },
                     onOpenModel = { route = SettingsRoute.Model },
-                    onOpenKeys = { route = SettingsRoute.Keys },
+                    onOpenVoice = { route = SettingsRoute.Voice },
+                    onOpenDictation = { route = SettingsRoute.Dictation },
                     onOpenOffline = { route = SettingsRoute.Offline },
                 )
 
@@ -193,19 +182,24 @@ fun SettingsScreen(
 
                 SettingsRoute.Model -> ModelSettingsScreen(
                     onBack = { route = SettingsRoute.Hub },
-                    models = models,
+                    models = viewModel.models,
                     selected = model,
                     onSelect = viewModel::setModel,
                 )
 
-                SettingsRoute.Keys -> KeysSettingsScreen(
+                SettingsRoute.Voice -> VoiceSettingsScreen(
                     onBack = { route = SettingsRoute.Hub },
-                    apiKeys = apiKeys,
-                    customModels = customModels,
-                    keyRows = keyRows,
-                    onTest = viewModel::test,
-                    onRemove = viewModel::removeKey,
-                    onClearError = viewModel::dismissKeyError,
+                    voices = viewModel.voices,
+                    selected = voice,
+                    onSelect = viewModel::setVoice,
+                    speed = speechSpeed,
+                    onSpeed = viewModel::setSpeechSpeed,
+                )
+
+                SettingsRoute.Dictation -> DictationSettingsScreen(
+                    onBack = { route = SettingsRoute.Hub },
+                    selected = dictationMode,
+                    onSelect = viewModel::setDictationMode,
                 )
 
                 SettingsRoute.Offline -> OfflineSettingsScreen(
@@ -243,7 +237,7 @@ private fun SettingsTopBar(title: String, onBack: () -> Unit) {
 }
 
 /**
- * The hub: four category rows, each a quiet lapis-tinted glyph, a title and
+ * The hub: three category rows, each a quiet lapis-tinted glyph, a title and
  * the live state of that category, and a chevron. About and the version sit
  * below, never behind a tap — they're links and a footnote, not a setting.
  */
@@ -252,11 +246,13 @@ private fun SettingsHub(
     onBack: () -> Unit,
     themeSummary: String,
     modelSummary: String,
-    keysSummary: String,
+    voiceSummary: String,
+    dictationSummary: String,
     offlineSummary: String,
     onOpenTheme: () -> Unit,
     onOpenModel: () -> Unit,
-    onOpenKeys: () -> Unit,
+    onOpenVoice: () -> Unit,
+    onOpenDictation: () -> Unit,
     onOpenOffline: () -> Unit,
 ) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -280,10 +276,17 @@ private fun SettingsHub(
             )
             RowDivider()
             HubRow(
-                icon = VerbaIcons.Key,
-                title = stringResource(R.string.settings_section_keys),
-                value = keysSummary,
-                onClick = onOpenKeys,
+                icon = VerbaIcons.VolumeUp,
+                title = stringResource(R.string.settings_section_voice),
+                value = voiceSummary,
+                onClick = onOpenVoice,
+            )
+            RowDivider()
+            HubRow(
+                icon = VerbaIcons.Mic,
+                title = stringResource(R.string.settings_section_dictation),
+                value = dictationSummary,
+                onClick = onOpenDictation,
             )
             RowDivider()
             HubRow(
@@ -375,23 +378,12 @@ private fun ModelSettingsScreen(
         Spacer(Modifier.height(8.dp))
         SettingsTopBar(title = stringResource(R.string.settings_section_model), onBack = onBack)
         Spacer(Modifier.height(20.dp))
-        Text(
-            text = stringResource(R.string.model_free_tier_note),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 24.dp),
-        )
-        Spacer(Modifier.height(16.dp))
-        SettingsCard(Modifier.animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec())) {
+        SettingsCard {
             models.forEachIndexed { index, candidate ->
                 if (index > 0) RowDivider()
                 ChoiceRow(
                     title = candidate.name,
-                    subtitle = candidate.description?.let { stringResource(it) }
-                        ?: stringResource(
-                            R.string.model_custom_subtitle,
-                            candidate.provider.displayName,
-                        ),
+                    subtitle = stringResource(candidate.description),
                     selected = selected.id == candidate.id,
                     onClick = { onSelect(candidate) },
                 )
@@ -401,43 +393,65 @@ private fun ModelSettingsScreen(
     }
 }
 
+/** Read-aloud voices; every one speaks every language, so it's purely a matter of taste. */
 @Composable
-private fun KeysSettingsScreen(
+private fun VoiceSettingsScreen(
     onBack: () -> Unit,
-    apiKeys: Map<Provider, String>,
-    customModels: Map<Provider, String>,
-    keyRows: Map<Provider, KeyRowState>,
-    onTest: (Provider, String, String) -> Unit,
-    onRemove: (Provider) -> Unit,
-    onClearError: (Provider) -> Unit,
+    voices: List<Voice>,
+    selected: Voice,
+    onSelect: (Voice) -> Unit,
+    speed: Float,
+    onSpeed: (Float) -> Unit,
 ) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Spacer(Modifier.height(8.dp))
-        SettingsTopBar(title = stringResource(R.string.settings_section_keys), onBack = onBack)
+        SettingsTopBar(title = stringResource(R.string.settings_section_voice), onBack = onBack)
         Spacer(Modifier.height(20.dp))
+        SectionLabel(stringResource(R.string.voice_speed))
         SettingsCard {
-            // One open at a time: tapping a provider closes whichever was open.
-            var expandedProvider by rememberSaveable { mutableStateOf<String?>(null) }
-            // On-device engines carry no key, so they never appear as a key row.
-            Provider.entries.filter { !it.onDevice }.forEachIndexed { index, provider ->
+            SingleChoiceSegmentedButtonRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+            ) {
+                SpeechSpeeds.all.forEachIndexed { index, pace ->
+                    SegmentedButton(
+                        selected = pace == speed,
+                        onClick = { onSpeed(pace) },
+                        shape = SegmentedButtonDefaults.itemShape(index, SpeechSpeeds.all.size),
+                    ) {
+                        Text(speedLabel(pace))
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+        SectionLabel(stringResource(R.string.voice_voices))
+        SettingsCard {
+            voices.forEachIndexed { index, candidate ->
                 if (index > 0) RowDivider()
-                ProviderKeyRow(
-                    provider = provider,
-                    expanded = expandedProvider == provider.name,
-                    onExpand = { expandedProvider = provider.name },
-                    onCollapse = { if (expandedProvider == provider.name) expandedProvider = null },
-                    savedKey = apiKeys[provider],
-                    savedModel = customModels[provider],
-                    state = keyRows[provider] ?: KeyRowState.Idle,
-                    onTest = { key, model -> onTest(provider, key, model) },
-                    onRemove = { onRemove(provider) },
-                    onClearError = { onClearError(provider) },
+                val kind = stringResource(
+                    if (candidate.female) R.string.voice_female else R.string.voice_male,
+                )
+                ChoiceRow(
+                    title = candidate.name,
+                    subtitle = if (candidate == Voices.default) {
+                        stringResource(R.string.voice_default_suffix, kind)
+                    } else {
+                        kind
+                    },
+                    selected = selected.id == candidate.id,
+                    onClick = { onSelect(candidate) },
                 )
             }
         }
         Spacer(Modifier.height(32.dp))
     }
 }
+
+/** 1.25 → "1.25×", 1 → "1×". */
+private fun speedLabel(pace: Float): String =
+    (if (pace % 1f == 0f) pace.toInt().toString() else pace.toString()) + "×"
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -469,7 +483,7 @@ private fun OfflineSettingsScreen(
 
 /**
  * One hub category row: a soft lapis-tinted glyph tile on the left — the
- * house style, distinct from the per-provider brand tiles inside API keys —
+ * house style —
  * the category name, its live value beneath, and a static disclosure chevron.
  */
 @Composable
@@ -663,6 +677,41 @@ private fun ThemeMode.copy(): Pair<String, String> = when (this) {
         stringResource(R.string.theme_black) to stringResource(R.string.theme_black_subtitle)
 }
 
+/** Batch or Live speech-to-text for the mic button. */
+@Composable
+private fun DictationSettingsScreen(
+    onBack: () -> Unit,
+    selected: DictationMode,
+    onSelect: (DictationMode) -> Unit,
+) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Spacer(Modifier.height(8.dp))
+        SettingsTopBar(title = stringResource(R.string.settings_section_dictation), onBack = onBack)
+        Spacer(Modifier.height(20.dp))
+        SettingsCard {
+            DictationMode.entries.forEachIndexed { index, mode ->
+                if (index > 0) RowDivider()
+                val (title, subtitle) = mode.copy()
+                ChoiceRow(
+                    title = title,
+                    subtitle = subtitle,
+                    selected = selected == mode,
+                    onClick = { onSelect(mode) },
+                )
+            }
+        }
+        Spacer(Modifier.height(32.dp))
+    }
+}
+
+@Composable
+private fun DictationMode.copy(): Pair<String, String> = when (this) {
+    DictationMode.BATCH ->
+        stringResource(R.string.dictation_batch) to stringResource(R.string.dictation_batch_subtitle)
+    DictationMode.LIVE ->
+        stringResource(R.string.dictation_live) to stringResource(R.string.dictation_live_subtitle)
+}
+
 /**
  * The one container shape in Settings: a soft-cornered surface with a hairline
  * border, the same card the language chip and search field wear. Rows stack
@@ -769,302 +818,6 @@ private fun ChoiceRow(
                     scaleY = checkScale
                     alpha = checkAlpha
                 },
-        )
-    }
-}
-
-/**
- * The flat color and real wordmark that stand in for each provider's logo —
- * traced into [VerbaIcons] from lobehub's MIT-licensed icon set, not an
- * invented monogram. The hue is fixed regardless of theme, the way a real
- * logo would be.
- */
-private data class ProviderBrand(val color: Color, val icon: ImageVector)
-
-private val Provider.brand: ProviderBrand
-    get() = when (this) {
-        Provider.OPENROUTER -> ProviderBrand(Color(0xFF6467F2), VerbaIcons.LogoOpenRouter)
-        Provider.OPENAI -> ProviderBrand(Color(0xFF10A37F), VerbaIcons.LogoOpenAi)
-        Provider.ANTHROPIC -> ProviderBrand(Color(0xFFCC785C), VerbaIcons.LogoAnthropic)
-        Provider.GOOGLE -> ProviderBrand(Color(0xFF4285F4), VerbaIcons.LogoGoogle)
-        Provider.MISTRAL -> ProviderBrand(Color(0xFFFA6400), VerbaIcons.LogoMistral)
-        Provider.DEEPSEEK -> ProviderBrand(Color(0xFF4D6BFE), VerbaIcons.LogoDeepSeek)
-        Provider.CEREBRAS -> ProviderBrand(Color(0xFFF15A29), VerbaIcons.LogoCerebras)
-        Provider.MLKIT -> ProviderBrand(Color(0xFF757575), VerbaIcons.LogoOpenRouter)
-    }
-
-/** A provider's brand tile: its real logo on a soft wash of its own color. */
-@Composable
-private fun ProviderBrandTile(provider: Provider) {
-    val brand = provider.brand
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .size(40.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(brand.color.copy(alpha = 0.16f)),
-    ) {
-        Icon(
-            imageVector = brand.icon,
-            contentDescription = null,
-            tint = brand.color,
-            modifier = Modifier.size(20.dp),
-        )
-    }
-}
-
-/**
- * One provider, one uniform flow for all of them: a key and a model id, tested
- * together against the live API. It rests as a quiet connected line — the model
- * it answers with, and the last four of the key — and opens on tap into the two
- * fields plus Test. Nothing is stored until that exact pair verifies, so a
- * connected row is a row you can actually translate on.
- */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun ProviderKeyRow(
-    provider: Provider,
-    expanded: Boolean,
-    onExpand: () -> Unit,
-    onCollapse: () -> Unit,
-    savedKey: String?,
-    savedModel: String?,
-    state: KeyRowState,
-    onTest: (key: String, model: String) -> Unit,
-    onRemove: () -> Unit,
-    onClearError: () -> Unit,
-) {
-    val connected = savedKey != null && savedModel != null
-    // Re-keying on [connected] resets the form the moment a test succeeds: the
-    // key draft clears, the model draft adopts what stuck.
-    var keyDraft by rememberSaveable(connected) { mutableStateOf("") }
-    var modelDraft by rememberSaveable(connected) { mutableStateOf(savedModel.orEmpty()) }
-    val testing = state == KeyRowState.Testing
-    // A row that has just connected folds itself shut.
-    LaunchedEffect(connected) { if (connected) onCollapse() }
-
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec())
-            .clickable(enabled = !expanded) { onExpand() }
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            ProviderBrandTile(provider)
-            Spacer(Modifier.size(16.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = provider.displayName,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = if (connected) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurface,
-                )
-                if (!expanded) {
-                    Text(
-                        text = when {
-                            connected -> stringResource(
-                                R.string.keys_verified_subtitle,
-                                savedModel.orEmpty(),
-                                savedKey.orEmpty().takeLast(4),
-                            )
-                            // Both ship a free bundled model backed by a shared key;
-                            // a personal key here buys a quota of the user's own.
-                            provider == Provider.OPENROUTER || provider == Provider.GOOGLE ->
-                                stringResource(R.string.keys_add_subtitle_shared_free)
-                            else -> stringResource(R.string.keys_add_hint, provider.displayName)
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            Spacer(Modifier.size(16.dp))
-            when {
-                connected -> IconButton(onClick = onRemove) {
-                    Icon(
-                        imageVector = Icons.Rounded.Close,
-                        contentDescription = stringResource(R.string.keys_remove),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-                !expanded -> Icon(
-                    imageVector = Icons.Rounded.Add,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.outline,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-        }
-
-        if (expanded) {
-            val keyFocus = remember { FocusRequester() }
-            LaunchedEffect(Unit) { keyFocus.requestFocus() }
-
-            Spacer(Modifier.height(16.dp))
-            CredentialField(
-                label = stringResource(R.string.keys_field_key),
-                value = keyDraft,
-                hint = provider.keyHint,
-                imeAction = ImeAction.Next,
-                enabled = !testing,
-                isSecret = true,
-                focusRequester = keyFocus,
-                onValueChange = {
-                    keyDraft = it
-                    onClearError()
-                },
-                onImeAction = {},
-            )
-            Spacer(Modifier.height(18.dp))
-            CredentialField(
-                label = stringResource(R.string.keys_field_model),
-                value = modelDraft,
-                hint = stringResource(R.string.keys_model_hint, provider.probeModel),
-                imeAction = ImeAction.Done,
-                enabled = !testing,
-                onValueChange = {
-                    modelDraft = it
-                    onClearError()
-                },
-                onImeAction = { onTest(keyDraft, modelDraft) },
-            )
-
-            if (state is KeyRowState.Failed) {
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    text = errorMessage(state.check, provider, modelDraft),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-
-            Spacer(Modifier.height(16.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Spacer(Modifier.weight(1f))
-                if (testing) {
-                    LoadingIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                } else {
-                    val ready = keyDraft.isNotBlank() && modelDraft.isNotBlank()
-                    Text(
-                        text = stringResource(R.string.keys_test),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = if (ready) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.outline,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .clickable(enabled = ready) { onTest(keyDraft, modelDraft) }
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                    )
-                }
-            }
-        }
-    }
-}
-
-/** Maps a failed test to the one honest line that names what actually went wrong. */
-@Composable
-private fun errorMessage(check: CredentialCheck, provider: Provider, model: String): String =
-    when (check) {
-        CredentialCheck.INVALID_KEY ->
-            stringResource(R.string.keys_err_key, provider.displayName)
-        CredentialCheck.MODEL_NOT_FOUND ->
-            stringResource(R.string.keys_err_model, provider.displayName, model.trim())
-        CredentialCheck.RATE_LIMITED ->
-            stringResource(R.string.keys_err_rate, provider.displayName)
-        CredentialCheck.UNREACHABLE ->
-            stringResource(R.string.keys_err_network, provider.displayName)
-        CredentialCheck.VALID, CredentialCheck.UNKNOWN ->
-            stringResource(R.string.keys_err_unknown, provider.displayName)
-    }
-
-/**
- * One labelled, borderless input on a hairline rule — the same typing surface
- * as the rest of Verba, dressed with a small caps label and an underline so two
- * of them stack legibly. Used for both the key and the model id.
- */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun CredentialField(
-    label: String,
-    value: String,
-    hint: String,
-    imeAction: ImeAction,
-    enabled: Boolean,
-    onValueChange: (String) -> Unit,
-    onImeAction: () -> Unit,
-    focusRequester: FocusRequester? = null,
-    isSecret: Boolean = false,
-) {
-    val textStyle = MaterialTheme.typography.bodyLarge.copy(
-        color = MaterialTheme.colorScheme.onSurface,
-    )
-    // Masked by default since this is a credential, not just an id — the
-    // toggle only reveals it for as long as this row stays composed.
-    var revealed by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth()) {
-        Text(
-            text = label.uppercase(),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(8.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                singleLine = true,
-                enabled = enabled,
-                textStyle = textStyle,
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                visualTransformation = if (isSecret && !revealed) {
-                    PasswordVisualTransformation()
-                } else {
-                    VisualTransformation.None
-                },
-                keyboardOptions = KeyboardOptions(
-                    imeAction = imeAction,
-                    keyboardType = if (isSecret) KeyboardType.Password else KeyboardType.Text,
-                ),
-                keyboardActions = KeyboardActions(
-                    onNext = { onImeAction() },
-                    onDone = { onImeAction() },
-                ),
-                modifier = Modifier
-                    .weight(1f)
-                    .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier),
-                decorationBox = { innerTextField ->
-                    Box {
-                        if (value.isEmpty()) {
-                            Text(text = hint, style = textStyle, color = MaterialTheme.colorScheme.outline)
-                        }
-                        innerTextField()
-                    }
-                },
-            )
-            if (isSecret && value.isNotEmpty()) {
-                IconButton(onClick = { revealed = !revealed }, modifier = Modifier.size(28.dp)) {
-                    Icon(
-                        imageVector = if (revealed) VerbaIcons.VisibilityOff else VerbaIcons.Visibility,
-                        contentDescription = stringResource(
-                            if (revealed) R.string.keys_hide_key else R.string.keys_show_key,
-                        ),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-            }
-        }
-        Spacer(Modifier.height(8.dp))
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(MaterialTheme.colorScheme.outlineVariant),
         )
     }
 }
