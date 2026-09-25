@@ -3,8 +3,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "npx wrangler@4.137.0 dev",
-    "deploy": "npx wrangler@4.137.0 deploy",
-    "types": "npx wrangler@4.137.0 types"
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "types": "wrangler types",
+    "typecheck": "wrangler types && tsc -p . && tsc -p test",
+    "test": "npm run typecheck && vitest run"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.2.6",
+    "typescript": "6.0.3",
+    "vitest": "4.1.11",
+    "wrangler": "4.139.0"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "$schema": "https://unpkg.com/wrangler@4.137.0/config-schema.json",
+  "$schema": "https://unpkg.com/wrangler@4.139.0/config-schema.json",
   "name": "verba-translate",
   "main": "src/index.ts",
   "compatibility_date": "2026-09-20",
