@@ -12,3 +12,6 @@ local.properties
 
 # Release build artifacts (published via GitHub Releases, not git)
 /app/release/
+
+# Worker dev dependencies
+node_modules/
